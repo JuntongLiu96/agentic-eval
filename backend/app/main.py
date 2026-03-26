@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.adapters import router as adapters_router
 from app.api.datasets import router as datasets_router
 from app.api.scorers import router as scorers_router
 from app.api.templates import router as templates_router
@@ -28,6 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(adapters_router)
 app.include_router(datasets_router)
 app.include_router(scorers_router)
 app.include_router(templates_router)
