@@ -25,3 +25,6 @@ app.add_typer(scorers_app, name="scorers")
 
 from cli.adapters import adapters_app
 app.add_typer(adapters_app, name="adapters")
+
+from cli.runs import runs_app
+app.add_typer(runs_app, name="runs")
