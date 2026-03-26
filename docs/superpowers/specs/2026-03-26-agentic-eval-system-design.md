@@ -50,7 +50,7 @@ The `data` and `expected_result` fields are JSON blobs so they can hold anything
 
 ### CSV Import/Export
 
-**Import:** Upload a `.csv` file where each row becomes a TestCase. Columns map to `name`, `data`, `expected_result`, and optionally `metadata`. Available via:
+**Import:** Upload a `.csv` file where each row becomes a TestCase. Columns map to `name`, `data`, `expected_result`, and optionally `metadata`. The `data`, `expected_result`, and `metadata` columns contain JSON-encoded strings (e.g., a cell might contain `{"prompt": "What is 2+2?"}`). Available via:
 - Web dashboard: file upload UI
 - CLI: `agenticeval datasets import --file data.csv --dataset <id>`
 
@@ -80,11 +80,50 @@ Standard CRUD for datasets and test cases:
 | `description` | string | What this scorer evaluates |
 | `output_format` | enum | `binary`, `numeric`, `rubric` |
 | `eval_prompt` | text | The LLM judge instruction prompt |
-| `criteria` | JSON | Evaluation dimensions (format varies by output_format) |
+| `criteria` | JSON | Evaluation dimensions (see Criteria Schema below) |
 | `score_range` | JSON | For numeric: `{min, max}`. For rubric: per-dimension ranges |
 | `tags` | JSON | List of string tags |
 | `created_at` | datetime | Creation timestamp |
 | `updated_at` | datetime | Last modified timestamp |
+
+### Criteria Schema (per output_format)
+
+**Binary criteria:**
+```json
+{
+  "conditions": [
+    {"name": "correct_tool_called", "description": "Agent called the expected tool"},
+    {"name": "params_match", "description": "Tool parameters match expected values"}
+  ],
+  "pass_rule": "all"  // "all" = all conditions must pass, "any" = at least one
+}
+```
+
+**Numeric criteria:**
+```json
+{
+  "dimension": "overall_quality",
+  "description": "Rate the overall quality of the agent's response",
+  "scale": {"min": 0, "max": 100, "labels": {"0": "Completely wrong", "50": "Partially correct", "100": "Perfect"}}
+}
+```
+
+**Rubric criteria:**
+```json
+{
+  "dimensions": [
+    {"name": "correctness", "description": "Is the answer factually correct?", "scale": {"min": 1, "max": 5}},
+    {"name": "completeness", "description": "Did the agent address all parts?", "scale": {"min": 1, "max": 5}}
+  ],
+  "aggregation": "average"  // how to compute overall_score: "average", "min", "weighted"
+}
+```
+
+### Deriving `passed` for Non-Binary Scorers
+
+- **Binary:** `passed` is directly from the judge response
+- **Numeric:** `passed = score >= score_range.min + (score_range.max - score_range.min) * 0.6` (i.e., 60% threshold by default). Configurable via an optional `pass_threshold` field on the scorer.
+- **Rubric:** `passed = overall_score >= pass_threshold` (same 60% default on the overall aggregated score)
 
 ### Output Formats
 
@@ -161,7 +200,7 @@ This simple concatenation approach keeps the judging process transparent and deb
 | `dataset_id` | int (FK) | Which dataset to use |
 | `scorer_id` | int (FK) | Which scorer to judge with |
 | `adapter_id` | int (FK) | Which bridge adapter to use |
-| `judge_config` | JSON | `{use_target_llm: true, override_model: null, override_api_key: null}` |
+| `judge_config` | JSON | See Judge LLM Resolution below |
 | `status` | enum | `pending`, `running`, `completed`, `failed` |
 | `started_at` | datetime | Run start time |
 | `finished_at` | datetime | Run end time |
@@ -177,6 +216,27 @@ This simple concatenation approach keeps the judging process transparent and deb
 | `judge_reasoning` | text | The LLM judge's explanation |
 | `passed` | boolean | Overall pass/fail |
 | `duration_ms` | int | How long this test case took |
+
+### Judge LLM Resolution
+
+The `judge_config` on EvalRun controls which LLM performs the judging:
+
+```json
+{
+  "use_target_llm": true,
+  "override_model": null,
+  "override_api_key": null,
+  "override_base_url": null
+}
+```
+
+**Resolution order:**
+1. If `override_model` is set, use it (with `override_api_key` and `override_base_url`)
+2. If `use_target_llm` is true, call the adapter's `get_judge_llm()`. If it returns a client, use it.
+3. Fall back to the **system default judge** configured via environment variables: `JUDGE_MODEL`, `JUDGE_API_KEY`, `JUDGE_BASE_URL` (e.g., `JUDGE_MODEL=gpt-4o`)
+4. If none of the above resolve, the run **fails at startup** with a clear error: "No judge LLM configured. Set JUDGE_MODEL/JUDGE_API_KEY env vars or configure an override."
+
+The system default judge env vars are documented in a `.env.example` file at the project root.
 
 ### Execution Loop (Sequential)
 
@@ -277,9 +337,18 @@ class AgentResult:
 - Fastest option, no network overhead
 
 **StdioAdapter** — for app-type agents (Electron/OpenClaw/CLI tools):
-- Config: `{command, args, cwd}`
+- Config: `{command, args, cwd, timeout_seconds}` (default timeout: 300s)
 - Launches target as a subprocess, communicates via JSON over stdin/stdout
-- Protocol: send `{"type": "run_test", "data": {...}}`, read `{"type": "result", "messages": [...]}`
+
+**Stdio Protocol (JSON Lines):**
+- **Framing:** One JSON object per line (newline-delimited JSON / JSON Lines). Each message is a single line terminated by `\n`.
+- **Request (eval system → target):** `{"type": "run_test", "id": "<uuid>", "data": {...}}\n`
+- **Success response (target → eval system):** `{"type": "result", "id": "<uuid>", "messages": [...]}\n`
+- **Error response (target → eval system):** `{"type": "error", "id": "<uuid>", "message": "description of what went wrong"}\n`
+- **Health check:** `{"type": "health_check"}\n` → `{"type": "health_ok"}\n`
+- **Timeout:** If no response within `timeout_seconds`, the subprocess is killed and the test case is marked as failed with error "Adapter timeout."
+- **Crash handling:** If the subprocess exits unexpectedly (non-zero exit code or EOF on stdout), the current test case is marked as failed and the run is aborted.
+- **Stderr:** Logged for debugging but not parsed as protocol messages.
 
 ### Adapter Registry
 
