@@ -15,3 +15,7 @@ def main(base_url: str = typer.Option("http://localhost:8000", "--base-url", "-u
                                        help="Backend server URL")):
     """AgenticEval CLI."""
     state["base_url"] = base_url
+
+
+from cli.datasets import datasets_app
+app.add_typer(datasets_app, name="datasets")
