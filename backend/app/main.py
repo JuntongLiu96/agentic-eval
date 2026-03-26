@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.datasets import router as datasets_router
+from app.api.scorers import router as scorers_router
 from app.db.database import init_db
 
 
@@ -24,3 +25,4 @@ app.add_middleware(
 )
 
 app.include_router(datasets_router)
+app.include_router(scorers_router)
