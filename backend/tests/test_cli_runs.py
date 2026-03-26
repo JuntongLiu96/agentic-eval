@@ -115,3 +115,21 @@ class TestRunsExportCmd:
         result = runner.invoke(app, ["runs", "export", "1", "--output", "results.csv"])
         assert result.exit_code == 0
         assert "results.csv" in result.stdout
+
+
+class TestTopLevelRunCmd:
+    @patch("cli.main.ApiClient")
+    def test_run_creates_and_starts(self, MockClient):
+        mock = MockClient.return_value
+        # First call: POST /api/runs (create), Second call: POST /api/runs/10/start
+        mock.post.side_effect = [
+            {"id": 10, "name": "quick-run", "dataset_id": 1, "scorer_id": 2,
+             "adapter_id": 3, "status": "pending", "judge_config": {},
+             "created_at": "2026-01-01", "started_at": None, "finished_at": None},
+            {"status": "completed", "summary": {"total": 2, "passed": 2, "pass_rate": 1.0},
+             "events": []},
+        ]
+        result = runner.invoke(app, ["run", "--dataset", "1", "--scorer", "2", "--adapter", "3"])
+        assert result.exit_code == 0
+        assert "completed" in result.stdout.lower() or "pass" in result.stdout.lower()
+        assert mock.post.call_count == 2
