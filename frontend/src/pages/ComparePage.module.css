@@ -1,0 +1,17 @@
+.backLink { color: #818cf8; text-decoration: none; font-size: 0.9rem; }
+.selectors { display: flex; align-items: center; gap: 0.75rem; margin: 1.5rem 0; }
+.selectors select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 0.5rem; border-radius: 4px; min-width: 200px; }
+.vs { color: #64748b; font-weight: bold; }
+.btn { background: #6366f1; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+.btn:hover { background: #818cf8; }
+.btn:disabled { opacity: 0.5; }
+.summaryRow { display: flex; gap: 1.5rem; margin: 1.5rem 0; }
+.summaryCard { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 1.2rem; flex: 1; text-align: center; }
+.summaryCard h3 { margin: 0; color: #a5b4fc; }
+.summaryCard p { color: #94a3b8; margin: 0.3rem 0; }
+.rate { font-size: 1.5rem; font-weight: bold; color: #e2e8f0; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e293b; }
+.table th { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+.changed { background: #1a1a0a; }
+.changedLabel { color: #fbbf24; font-size: 0.8rem; font-weight: bold; }

@@ -51,3 +51,8 @@
   color: #e0e0e0;
   overflow-y: auto;
 }
+
+.active {
+  background: #16213e;
+  color: #a78bfa !important;
+}

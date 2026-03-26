@@ -1,0 +1,15 @@
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.header h1 { margin: 0; color: #e2e8f0; }
+.btn { background: #6366f1; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+.btn:hover { background: #818cf8; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnDanger { background: #dc2626; color: white; border: none; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.btnDanger:hover { background: #ef4444; }
+.form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.form input, .form select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 0.5rem; border-radius: 4px; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e293b; }
+.table th { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+.table a { color: #818cf8; text-decoration: none; }
+.table a:hover { text-decoration: underline; }
+.empty { color: #64748b; text-align: center; padding: 2rem; }

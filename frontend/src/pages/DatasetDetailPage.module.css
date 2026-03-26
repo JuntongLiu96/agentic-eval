@@ -1,0 +1,13 @@
+.backLink { color: #818cf8; text-decoration: none; font-size: 0.9rem; }
+.backLink:hover { text-decoration: underline; }
+.desc { color: #94a3b8; }
+.meta { color: #64748b; font-size: 0.85rem; }
+.actions { display: flex; gap: 0.5rem; margin: 1rem 0; }
+.btn { background: #6366f1; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; text-decoration: none; display: inline-block; }
+.btn:hover { background: #818cf8; }
+.btnDanger { background: #dc2626; color: white; border: none; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+.table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e293b; }
+.table th { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+.jsonCell { font-family: 'SF Mono', monospace; font-size: 0.8rem; color: #94a3b8; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { color: #64748b; text-align: center; padding: 2rem; }
