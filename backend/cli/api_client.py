@@ -6,11 +6,11 @@ DEFAULT_TIMEOUT = 30.0
 
 # Global CLI state — holds --base-url value. Shared across all subcommands.
 # Lives here (not in main.py) to avoid circular imports between main ↔ subcommands.
-state = {"base_url": "http://localhost:8000"}
+state = {"base_url": "http://localhost:9100"}
 
 
 class ApiClient:
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: float = DEFAULT_TIMEOUT):
+    def __init__(self, base_url: str = "http://localhost:9100", timeout: float = DEFAULT_TIMEOUT):
         self.base_url = base_url
         self.timeout = timeout
 
@@ -20,7 +20,7 @@ class ApiClient:
     def _handle_connect_error(self) -> None:
         typer.echo(
             f"Error: Cannot connect to server at {self.base_url}. "
-            "Is the backend running? (Start with: uvicorn app.main:app)",
+            "Is the backend running? (Start with: uvicorn app.main:app --port 9100)",
             err=True,
         )
         raise SystemExit(1)

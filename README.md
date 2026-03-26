@@ -15,10 +15,10 @@ A general-purpose evaluation system for any agentic AI system, using LLM-as-a-Ju
 cd backend
 cp .env.example .env          # configure your judge LLM (see Environment Variables below)
 pip install -e ".[dev]"
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 9100
 ```
 
-The API server starts at **http://localhost:8000**. API docs are at http://localhost:8000/docs.
+The API server starts at **http://localhost:9100**. API docs are at http://localhost:9100/docs.
 
 ### 2. Start the Frontend
 
@@ -28,7 +28,7 @@ npm install
 npm run dev
 ```
 
-The web dashboard starts at **http://localhost:3000** and proxies API requests to the backend.
+The web dashboard starts at **http://localhost:9101** and proxies API requests to the backend.
 
 ### 3. Use the CLI (optional)
 
@@ -399,7 +399,7 @@ npx tsc --noEmit
 
 ## API Documentation
 
-With the backend running, visit **http://localhost:8000/docs** for the auto-generated OpenAPI (Swagger) documentation.
+With the backend running, visit **http://localhost:9100/docs** for the auto-generated OpenAPI (Swagger) documentation.
 
 ## Tech Stack
 

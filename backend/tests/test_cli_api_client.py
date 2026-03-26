@@ -7,15 +7,15 @@ from cli.api_client import ApiClient
 class TestApiClient:
     def test_default_base_url(self):
         client = ApiClient()
-        assert client.base_url == "http://localhost:8000"
+        assert client.base_url == "http://localhost:9100"
 
     def test_custom_base_url(self):
         client = ApiClient(base_url="http://myhost:9000")
         assert client.base_url == "http://myhost:9000"
 
     def test_get_builds_url(self):
-        client = ApiClient(base_url="http://localhost:8000")
-        assert client._url("/api/datasets") == "http://localhost:8000/api/datasets"
+        client = ApiClient(base_url="http://localhost:9100")
+        assert client._url("/api/datasets") == "http://localhost:9100/api/datasets"
 
     @patch("cli.api_client.httpx.get")
     def test_get_success(self, mock_get):
@@ -27,7 +27,7 @@ class TestApiClient:
         result = client.get("/api/datasets")
         assert result == [{"id": 1, "name": "ds1"}]
         mock_get.assert_called_once_with(
-            "http://localhost:8000/api/datasets", params=None, timeout=30.0
+            "http://localhost:9100/api/datasets", params=None, timeout=30.0
         )
 
     @patch("cli.api_client.httpx.get")
@@ -66,7 +66,7 @@ class TestApiClient:
         client = ApiClient()
         client.post("/api/runs/1/start", timeout=600.0)
         mock_post.assert_called_once_with(
-            "http://localhost:8000/api/runs/1/start", json=None, timeout=600.0
+            "http://localhost:9100/api/runs/1/start", json=None, timeout=600.0
         )
 
     @patch("cli.api_client.httpx.put")
