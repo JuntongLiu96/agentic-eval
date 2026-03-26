@@ -2,7 +2,30 @@ import asyncio
 import json
 import uuid
 from typing import Any
-from app.bridge.base import AgentResult, BridgeAdapter
+from app.bridge.base import AgentResult, BridgeAdapter, LLMClient
+
+
+class StdioJudgeLLMClient:
+    """LLMClient that sends judge requests through the target's stdin/stdout."""
+
+    def __init__(self, adapter: "StdioAdapter"):
+        self._adapter = adapter
+
+    async def chat(self, messages: list[dict[str, str]]) -> str:
+        process = await self._adapter._ensure_process()
+        msg = json.dumps({"type": "judge", "messages": messages}) + "\n"
+        process.stdin.write(msg.encode())
+        await process.stdin.drain()
+        line = await asyncio.wait_for(
+            process.stdout.readline(), timeout=self._adapter.timeout_seconds
+        )
+        if not line:
+            raise RuntimeError("Subprocess closed stdout during judge call")
+        data = json.loads(line.decode().strip())
+        if data.get("type") == "error":
+            raise RuntimeError(data.get("message", "Judge call failed"))
+        return data.get("content", "")
+
 
 class StdioAdapter(BridgeAdapter):
     def __init__(self):
@@ -70,6 +93,9 @@ class StdioAdapter(BridgeAdapter):
             return AgentResult(messages=[], success=False, error=f"Invalid JSON: {e}")
         except OSError as e:
             return AgentResult(messages=[], success=False, error=f"Process error: {e}")
+
+    async def get_judge_llm(self) -> LLMClient | None:
+        return StdioJudgeLLMClient(self)
 
     def adapter_type(self) -> str: return "stdio"
     def target_description(self) -> str: return self._description

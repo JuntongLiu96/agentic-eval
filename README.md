@@ -85,11 +85,12 @@ AgenticEval connects to your agent through one of three bridge adapters. Choose 
 
 Best for agents with a backend server (C#, Python, Go, Node.js, etc.).
 
-**What you need to implement:** Two HTTP endpoints in your agent's server.
+**What you need to implement:** Three HTTP endpoints in your agent's server.
 
 ```
 GET  /eval/health        → 200 OK (any response body)
 POST /eval/run           → accepts JSON test data, returns agent output
+POST /eval/judge         → accepts chat messages, returns LLM response (uses your agent's LLM)
 ```
 
 **`POST /eval/run` request body:**
@@ -111,6 +112,25 @@ POST /eval/run           → accepts JSON test data, returns agent output
 }
 ```
 
+**`POST /eval/judge` request body:**
+```json
+{
+  "messages": [
+    {"role": "system", "content": "You are an expert evaluation judge..."},
+    {"role": "user", "content": "## Scoring Criteria\n..."}
+  ]
+}
+```
+
+**`POST /eval/judge` response body:**
+```json
+{
+  "content": "{\"passed\": true, \"reasoning\": \"The agent correctly answered 4.\"}"
+}
+```
+
+This endpoint lets AgenticEval use your agent's own LLM for judging. Your implementation should forward the messages to whatever LLM your agent uses internally and return the response. This way, the eval uses the same model, API key, and configuration as your agent.
+
 **Register the adapter in AgenticEval:**
 
 ```bash
@@ -128,7 +148,8 @@ The full config object supports custom endpoint paths:
   "base_url": "http://localhost:5000",
   "endpoints": {
     "send_test": "/eval/run",
-    "health": "/eval/health"
+    "health": "/eval/health",
+    "judge": "/eval/judge"
   }
 }
 ```
@@ -158,6 +179,12 @@ Run a test:
 Error:
 ```
 ← stdout: {"type": "error", "message": "something went wrong"}\n
+```
+
+Judge (for eval — forward to your agent's LLM):
+```
+→ stdin:  {"type": "judge", "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]}\n
+← stdout: {"type": "judge_result", "content": "...the LLM response..."}\n
 ```
 
 **Register the adapter:**

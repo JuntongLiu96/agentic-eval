@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.bridge.http_adapter import HTTPAdapter
+from app.bridge.http_adapter import HTTPAdapter, HTTPJudgeLLMClient
+from app.bridge.base import LLMClient
 
 @pytest.mark.asyncio
 async def test_http_adapter_connect():
@@ -51,4 +52,66 @@ async def test_http_adapter_health():
     with patch.object(adapter, "_client") as mock_client:
         mock_client.get = AsyncMock(return_value=mock_response)
         assert await adapter.health_check() is True
+    await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_get_judge_llm_returns_client():
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999"})
+    judge = await adapter.get_judge_llm()
+    assert judge is not None
+    assert isinstance(judge, LLMClient)
+    assert isinstance(judge, HTTPJudgeLLMClient)
+    await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_get_judge_llm_not_connected():
+    adapter = HTTPAdapter()
+    judge = await adapter.get_judge_llm()
+    assert judge is None
+
+@pytest.mark.asyncio
+async def test_http_judge_llm_client_chat():
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999"})
+    judge = await adapter.get_judge_llm()
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json = MagicMock(return_value={"content": '{"passed": true, "reasoning": "correct"}'})
+    mock_response.raise_for_status = MagicMock()
+    with patch.object(adapter, "_client") as mock_client:
+        mock_client.post = AsyncMock(return_value=mock_response)
+        # Re-create judge with the mocked client
+        judge = HTTPJudgeLLMClient(mock_client, "/eval/judge")
+        result = await judge.chat([
+            {"role": "system", "content": "You are a judge."},
+            {"role": "user", "content": "Evaluate this."},
+        ])
+        assert "passed" in result
+        mock_client.post.assert_called_once_with(
+            "/eval/judge",
+            json={"messages": [
+                {"role": "system", "content": "You are a judge."},
+                {"role": "user", "content": "Evaluate this."},
+            ]},
+        )
+    await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_default_judge_endpoint():
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999"})
+    assert adapter.endpoints.get("judge") == "/eval/judge"
+    await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_custom_judge_endpoint():
+    adapter = HTTPAdapter()
+    await adapter.connect({
+        "base_url": "http://localhost:9999",
+        "endpoints": {"judge": "/custom/judge"},
+    })
+    judge = await adapter.get_judge_llm()
+    assert isinstance(judge, HTTPJudgeLLMClient)
+    assert judge._endpoint == "/custom/judge"
     await adapter.disconnect()
