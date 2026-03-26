@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.adapters import router as adapters_router
 from app.api.datasets import router as datasets_router
+from app.api.runs import router as runs_router
 from app.api.scorers import router as scorers_router
 from app.api.templates import router as templates_router
 from app.db.database import async_session, init_db
@@ -31,5 +32,6 @@ app.add_middleware(
 
 app.include_router(adapters_router)
 app.include_router(datasets_router)
+app.include_router(runs_router)
 app.include_router(scorers_router)
 app.include_router(templates_router)
