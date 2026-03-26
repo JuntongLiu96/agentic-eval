@@ -1,0 +1,42 @@
+name: Tool Call Correctness
+description: Evaluates whether the agent called the correct tool with the right parameters
+category: tool-correctness
+output_format: binary
+template_prompt: |
+  You are creating a scorer for an agentic eval system. The scorer evaluates whether an AI agent
+  called the correct tool with the correct parameters.
+
+  Generate a scorer JSON with this exact schema:
+  {
+    "name": "<descriptive name for your eval>",
+    "output_format": "binary",
+    "eval_prompt": "<instruction for the LLM judge to evaluate tool call correctness>",
+    "criteria": {
+      "conditions": [
+        {"name": "<condition_name>", "description": "<what to check>"}
+      ],
+      "pass_rule": "all"
+    },
+    "tags": ["tool"]
+  }
+
+  The tool I want to evaluate is: [DESCRIBE YOUR TOOL HERE]
+usage_instructions: >
+  Copy the template prompt, paste it into your coding agent, and replace
+  [DESCRIBE YOUR TOOL HERE] with a description of the specific tool you want to evaluate.
+example_scorer:
+  name: Search Tool Correctness
+  output_format: binary
+  eval_prompt: >
+    Evaluate whether the agent called the search tool with the correct query parameters.
+    Check that the tool name matches and all required parameters are present and correct.
+  criteria:
+    conditions:
+      - name: correct_tool_called
+        description: Agent called the 'search' tool
+      - name: params_match
+        description: Query parameter matches the expected search term
+    pass_rule: all
+  tags:
+    - tool
+    - search

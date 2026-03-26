@@ -1,0 +1,51 @@
+name: Response Quality
+description: General quality rubric scoring accuracy, completeness, and helpfulness
+category: response-quality
+output_format: rubric
+template_prompt: |
+  You are creating a scorer for an agentic eval system. The scorer uses a multi-dimensional
+  rubric to rate the quality of an AI agent's response.
+
+  Generate a scorer JSON with this exact schema:
+  {
+    "name": "<descriptive name>",
+    "output_format": "rubric",
+    "eval_prompt": "<instruction for the LLM judge to rate response quality>",
+    "criteria": {
+      "dimensions": [
+        {"name": "<dimension>", "description": "<what to evaluate>", "scale": {"min": 1, "max": 5}}
+      ],
+      "aggregation": "average"
+    },
+    "score_range": {"min": 1, "max": 5},
+    "pass_threshold": 3.0,
+    "tags": ["quality"]
+  }
+
+  The task I want to evaluate responses for is: [DESCRIBE YOUR TASK HERE]
+usage_instructions: >
+  Copy the template prompt, paste it into your coding agent, and replace
+  [DESCRIBE YOUR TASK HERE] with the task whose response quality you want to evaluate.
+example_scorer:
+  name: General Response Quality
+  output_format: rubric
+  eval_prompt: >
+    Rate the agent's response on the following dimensions.
+    For each dimension, provide a score and reasoning.
+  criteria:
+    dimensions:
+      - name: correctness
+        description: Is the response factually accurate?
+        scale: { min: 1, max: 5 }
+      - name: completeness
+        description: Does the response address all parts of the request?
+        scale: { min: 1, max: 5 }
+      - name: helpfulness
+        description: Is the response useful and actionable?
+        scale: { min: 1, max: 5 }
+    aggregation: average
+  score_range: { min: 1, max: 5 }
+  pass_threshold: 3.0
+  tags:
+    - quality
+    - general

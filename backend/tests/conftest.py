@@ -3,6 +3,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.database import Base, get_db
+from app.db.seed import seed_scorer_templates
 from app.main import app
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -15,6 +16,8 @@ TestSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_com
 async def setup_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with TestSessionLocal() as session:
+        await seed_scorer_templates(session)
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

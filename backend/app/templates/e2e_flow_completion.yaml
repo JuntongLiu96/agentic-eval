@@ -1,0 +1,44 @@
+name: E2E Flow Completion
+description: Evaluates whether the agent completed a multi-step workflow end-to-end
+category: e2e-flow
+output_format: binary
+template_prompt: |
+  You are creating a scorer for an agentic eval system. The scorer evaluates whether an AI agent
+  completed a multi-step workflow from start to finish.
+
+  Generate a scorer JSON with this exact schema:
+  {
+    "name": "<descriptive name>",
+    "output_format": "binary",
+    "eval_prompt": "<instruction for the LLM judge to verify flow completion>",
+    "criteria": {
+      "conditions": [
+        {"name": "<step_name>", "description": "<what this step should accomplish>"}
+      ],
+      "pass_rule": "all"
+    },
+    "tags": ["e2e"]
+  }
+
+  The workflow I want to evaluate is: [DESCRIBE YOUR WORKFLOW HERE]
+usage_instructions: >
+  Copy the template prompt, paste it into your coding agent, and replace
+  [DESCRIBE YOUR WORKFLOW HERE] with the multi-step workflow you want to evaluate.
+example_scorer:
+  name: File Creation Flow
+  output_format: binary
+  eval_prompt: >
+    Evaluate whether the agent completed the file creation workflow:
+    1. Read the template, 2. Fill in variables, 3. Write the output file.
+  criteria:
+    conditions:
+      - name: template_read
+        description: Agent read the template file
+      - name: variables_filled
+        description: All template variables were replaced
+      - name: file_written
+        description: Output file was created successfully
+    pass_rule: all
+  tags:
+    - e2e
+    - file-creation
