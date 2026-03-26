@@ -4,6 +4,10 @@ import typer
 
 DEFAULT_TIMEOUT = 30.0
 
+# Global CLI state — holds --base-url value. Shared across all subcommands.
+# Lives here (not in main.py) to avoid circular imports between main ↔ subcommands.
+state = {"base_url": "http://localhost:8000"}
+
 
 class ApiClient:
     def __init__(self, base_url: str = "http://localhost:8000", timeout: float = DEFAULT_TIMEOUT):

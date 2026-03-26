@@ -2,8 +2,7 @@
 import typer
 from rich.console import Console
 from rich.table import Table
-from cli.api_client import ApiClient
-from cli.main import state
+from cli.api_client import ApiClient, state
 
 datasets_app = typer.Typer(help="Manage eval datasets and test cases")
 console = Console()

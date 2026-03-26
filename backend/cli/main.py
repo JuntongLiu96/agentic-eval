@@ -4,7 +4,7 @@ import json as json_mod
 import typer
 from rich.console import Console
 
-from cli.api_client import ApiClient
+from cli.api_client import ApiClient, state
 
 app = typer.Typer(
     name="agenticeval",
@@ -12,7 +12,6 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-state = {"base_url": "http://localhost:8000"}
 _console = Console()
 
 
