@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class TestCaseCreate(BaseModel):
@@ -18,7 +18,7 @@ class TestCaseResponse(BaseModel):
     name: str
     data: Any
     expected_result: Any
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = Field(validation_alias="metadata_")
 
     model_config = {"from_attributes": True}
 
