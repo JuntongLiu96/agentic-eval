@@ -22,3 +22,6 @@ app.add_typer(datasets_app, name="datasets")
 
 from cli.scorers import scorers_app
 app.add_typer(scorers_app, name="scorers")
+
+from cli.adapters import adapters_app
+app.add_typer(adapters_app, name="adapters")
