@@ -1,0 +1,53 @@
+.layout {
+  display: flex;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.sidebar {
+  width: 220px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 1rem;
+  flex-shrink: 0;
+}
+
+.logo {
+  font-size: 1.3rem;
+  color: #a78bfa;
+  margin-bottom: 2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #334155;
+}
+
+.navList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navList li {
+  margin-bottom: 0.5rem;
+}
+
+.navList a {
+  color: #94a3b8;
+  text-decoration: none;
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.navList a:hover {
+  background: #16213e;
+  color: #e2e8f0;
+}
+
+.content {
+  flex: 1;
+  padding: 2rem;
+  background: #0f0f23;
+  color: #e0e0e0;
+  overflow-y: auto;
+}
