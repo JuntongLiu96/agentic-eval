@@ -19,3 +19,6 @@ def main(base_url: str = typer.Option("http://localhost:8000", "--base-url", "-u
 
 from cli.datasets import datasets_app
 app.add_typer(datasets_app, name="datasets")
+
+from cli.scorers import scorers_app
+app.add_typer(scorers_app, name="scorers")
