@@ -28,3 +28,6 @@ app.add_typer(adapters_app, name="adapters")
 
 from cli.runs import runs_app
 app.add_typer(runs_app, name="runs")
+
+from cli.templates import templates_app
+app.add_typer(templates_app, name="templates")
