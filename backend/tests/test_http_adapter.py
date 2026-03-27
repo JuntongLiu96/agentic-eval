@@ -115,3 +115,30 @@ async def test_http_adapter_custom_judge_endpoint():
     assert isinstance(judge, HTTPJudgeLLMClient)
     assert judge._endpoint == "/custom/judge"
     await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_auth_token_bearer_prefix():
+    adapter = HTTPAdapter()
+    await adapter.connect({
+        "base_url": "http://localhost:9999",
+        "auth_token": "Bearer eyJtoken123",
+    })
+    assert adapter._client.headers["authorization"] == "Bearer eyJtoken123"
+    await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_auth_token_raw():
+    adapter = HTTPAdapter()
+    await adapter.connect({
+        "base_url": "http://localhost:9999",
+        "auth_token": "eyJtoken123",
+    })
+    assert adapter._client.headers["authorization"] == "Bearer eyJtoken123"
+    await adapter.disconnect()
+
+@pytest.mark.asyncio
+async def test_http_adapter_no_auth_token():
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999"})
+    assert "authorization" not in adapter._client.headers
+    await adapter.disconnect()

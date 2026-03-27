@@ -31,7 +31,17 @@ class HTTPAdapter(BridgeAdapter):
             "judge": "/eval/judge",
         })
         self._description = config.get("description", f"HTTP agent at {self.base_url}")
-        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=300.0)
+
+        # Optional auth token — sent as Authorization header on every request
+        headers = {}
+        auth_token = config.get("auth_token", "")
+        if auth_token:
+            # Support both "Bearer xxx" and raw "xxx" formats
+            if not auth_token.startswith("Bearer "):
+                auth_token = f"Bearer {auth_token}"
+            headers["Authorization"] = auth_token
+
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=300.0, headers=headers)
 
     async def disconnect(self) -> None:
         if self._client:

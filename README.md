@@ -162,10 +162,11 @@ agenticeval adapters create \
 
 Or via the web dashboard: go to **Adapters → + New Adapter**.
 
-The full config object supports custom endpoint paths:
+The full config object:
 ```json
 {
   "base_url": "http://localhost:5000",
+  "auth_token": "Bearer eyJ...your-token-here...",
   "endpoints": {
     "send_test": "/eval/run",
     "health": "/eval/health",
@@ -173,6 +174,10 @@ The full config object supports custom endpoint paths:
   }
 }
 ```
+
+- `base_url` — **(required)** target agent's server URL
+- `auth_token` — **(optional)** sent as `Authorization` header on every request. Supports both `"Bearer eyJ..."` and raw `"eyJ..."` formats (auto-prefixes `Bearer ` if missing). Use this for agents behind auth (e.g., Azure AD tokens).
+- `endpoints` — **(optional)** custom endpoint paths (defaults shown above)
 
 #### Integration Prompt for Your Coding Agent
 
