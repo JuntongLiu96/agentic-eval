@@ -1,44 +1,60 @@
 name: E2E Flow Completion
 description: Evaluates whether the agent completed a multi-step workflow end-to-end
 category: e2e-flow
-output_format: binary
+output_format: numeric
 template_prompt: |
-  You are creating a scorer for an agentic eval system. The scorer evaluates whether an AI agent
-  completed a multi-step workflow from start to finish.
+  You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
+  The scorer evaluates whether an AI agent completed a multi-step workflow from start to finish.
+
+  The judge LLM will receive the agent's full message list and must return:
+  {"score": <number>, "justification": "<detailed explanation referencing the criteria>"}
 
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name>",
-    "output_format": "binary",
-    "eval_prompt": "<instruction for the LLM judge to verify flow completion>",
+    "output_format": "numeric",
+    "eval_prompt": "<instruction for the judge LLM to verify flow completion and score it>",
     "criteria": {
-      "conditions": [
-        {"name": "<step_name>", "description": "<what this step should accomplish>"}
-      ],
-      "pass_rule": "all"
+      "dimensions": [
+        {"name": "<step_name>", "description": "<what this step should accomplish>", "weight": <0.0-1.0>}
+      ]
     },
+    "score_range": {"min": 0, "max": 100},
+    "pass_threshold": 60,
     "tags": ["e2e"]
   }
+
+  The eval_prompt should instruct the judge to:
+  1. Check each workflow step against the agent's message list
+  2. Assign a score (0-100) based on how many steps were completed correctly
+  3. Provide a detailed justification explaining which steps succeeded/failed and why
 
   The workflow I want to evaluate is: [DESCRIBE YOUR WORKFLOW HERE]
 usage_instructions: >
   Copy the template prompt, paste it into your coding agent, and replace
   [DESCRIBE YOUR WORKFLOW HERE] with the multi-step workflow you want to evaluate.
+  The generated scorer will produce a 0-100 score with detailed justification.
 example_scorer:
   name: File Creation Flow
-  output_format: binary
+  output_format: numeric
   eval_prompt: >
-    Evaluate whether the agent completed the file creation workflow:
-    1. Read the template, 2. Fill in variables, 3. Write the output file.
+    Evaluate whether the agent completed the file creation workflow.
+    Score based on: template read (30 points), variables filled correctly (40 points),
+    output file written (30 points).
+    Return {"score": <0-100>, "justification": "<explain which steps were completed>"}.
   criteria:
-    conditions:
+    dimensions:
       - name: template_read
         description: Agent read the template file
+        weight: 0.3
       - name: variables_filled
-        description: All template variables were replaced
+        description: All template variables were replaced with correct values
+        weight: 0.4
       - name: file_written
         description: Output file was created successfully
-    pass_rule: all
+        weight: 0.3
+  score_range: { min: 0, max: 100 }
+  pass_threshold: 60
   tags:
     - e2e
     - file-creation

@@ -3,14 +3,24 @@ description: General quality rubric scoring accuracy, completeness, and helpfuln
 category: response-quality
 output_format: rubric
 template_prompt: |
-  You are creating a scorer for an agentic eval system. The scorer uses a multi-dimensional
-  rubric to rate the quality of an AI agent's response.
+  You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
+  The scorer uses a multi-dimensional rubric to rate the quality of an AI agent's response.
+
+  The judge LLM will receive the agent's full message list and must return:
+  {
+    "score": <overall_numeric_score>,
+    "overall_score": <same as score>,
+    "dimensions": [
+      {"name": "<dimension>", "score": <number>, "justification": "<why this score>"}
+    ],
+    "justification": "<overall justification referencing each dimension>"
+  }
 
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name>",
     "output_format": "rubric",
-    "eval_prompt": "<instruction for the LLM judge to rate response quality>",
+    "eval_prompt": "<instruction for the judge LLM to rate response quality on each dimension>",
     "criteria": {
       "dimensions": [
         {"name": "<dimension>", "description": "<what to evaluate>", "scale": {"min": 1, "max": 5}}
@@ -22,16 +32,25 @@ template_prompt: |
     "tags": ["quality"]
   }
 
+  The eval_prompt should instruct the judge to:
+  1. Score each dimension independently on the given scale
+  2. Compute an overall score (average of dimensions)
+  3. Provide a detailed justification for each dimension score and the overall score
+
   The task I want to evaluate responses for is: [DESCRIBE YOUR TASK HERE]
 usage_instructions: >
   Copy the template prompt, paste it into your coding agent, and replace
   [DESCRIBE YOUR TASK HERE] with the task whose response quality you want to evaluate.
+  The generated scorer will produce per-dimension scores and an overall score with justification.
 example_scorer:
   name: General Response Quality
   output_format: rubric
   eval_prompt: >
-    Rate the agent's response on the following dimensions.
-    For each dimension, provide a score and reasoning.
+    Rate the agent's response on each dimension (1-5 scale).
+    For each dimension, provide a score and justification.
+    Return {"score": <average>, "overall_score": <average>,
+    "dimensions": [{"name": "...", "score": N, "justification": "..."}],
+    "justification": "<overall assessment>"}.
   criteria:
     dimensions:
       - name: correctness

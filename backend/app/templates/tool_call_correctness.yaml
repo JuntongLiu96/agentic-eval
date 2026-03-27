@@ -1,42 +1,60 @@
 name: Tool Call Correctness
 description: Evaluates whether the agent called the correct tool with the right parameters
 category: tool-correctness
-output_format: binary
+output_format: numeric
 template_prompt: |
-  You are creating a scorer for an agentic eval system. The scorer evaluates whether an AI agent
-  called the correct tool with the correct parameters.
+  You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
+  The scorer evaluates whether an AI agent called the correct tool with the correct parameters.
+
+  The judge LLM will receive the agent's full message list (including tool calls) and must return:
+  {"score": <number>, "justification": "<detailed explanation referencing the criteria>"}
 
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name for your eval>",
-    "output_format": "binary",
-    "eval_prompt": "<instruction for the LLM judge to evaluate tool call correctness>",
+    "output_format": "numeric",
+    "eval_prompt": "<instruction for the judge LLM explaining what to evaluate and how to score>",
     "criteria": {
-      "conditions": [
-        {"name": "<condition_name>", "description": "<what to check>"}
-      ],
-      "pass_rule": "all"
+      "dimensions": [
+        {"name": "<what to check>", "description": "<detailed description>", "weight": <0.0-1.0>}
+      ]
     },
+    "score_range": {"min": 0, "max": 100},
+    "pass_threshold": 60,
     "tags": ["tool"]
   }
+
+  The eval_prompt should instruct the judge to:
+  1. Check each criterion against the agent's output
+  2. Assign a numeric score (0-100) based on how many criteria were met
+  3. Provide a detailed justification explaining which criteria passed/failed and why
 
   The tool I want to evaluate is: [DESCRIBE YOUR TOOL HERE]
 usage_instructions: >
   Copy the template prompt, paste it into your coding agent, and replace
   [DESCRIBE YOUR TOOL HERE] with a description of the specific tool you want to evaluate.
+  The generated scorer will produce a 0-100 score with detailed justification.
 example_scorer:
   name: Search Tool Correctness
-  output_format: binary
+  output_format: numeric
   eval_prompt: >
-    Evaluate whether the agent called the search tool with the correct query parameters.
-    Check that the tool name matches and all required parameters are present and correct.
+    Evaluate whether the agent called the search tool correctly.
+    Score 0-100 based on: correct tool name (40 points), correct parameters (40 points),
+    appropriate usage context (20 points).
+    Return {"score": <0-100>, "justification": "<explain which aspects were correct/incorrect>"}.
   criteria:
-    conditions:
+    dimensions:
       - name: correct_tool_called
-        description: Agent called the 'search' tool
+        description: Agent called the 'search' tool (not a different tool)
+        weight: 0.4
       - name: params_match
         description: Query parameter matches the expected search term
-    pass_rule: all
+        weight: 0.4
+      - name: appropriate_context
+        description: Tool was called at the right point in the conversation
+        weight: 0.2
+  score_range: { min: 0, max: 100 }
+  pass_threshold: 60
   tags:
     - tool
     - search
