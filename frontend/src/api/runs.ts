@@ -1,9 +1,10 @@
-import { apiGet, apiPost, apiDownloadUrl } from './client'
+import { apiGet, apiPost, apiDelete, apiDownloadUrl } from './client'
 import type { EvalRun, EvalRunCreate, EvalResult, RunComparison } from '../types'
 
 export const listRuns = () => apiGet<EvalRun[]>('/runs')
 export const getRun = (id: number) => apiGet<EvalRun>(`/runs/${id}`)
 export const createRun = (data: EvalRunCreate) => apiPost<EvalRun>('/runs', data)
+export const deleteRun = (id: number) => apiDelete(`/runs/${id}`)
 export const startRun = (id: number) => apiPost<{ status: string; summary: Record<string, unknown> }>(`/runs/${id}/start`)
 export const getRunResults = (id: number) => apiGet<EvalResult[]>(`/runs/${id}/results`)
 export const compareRuns = (run1: number, run2: number) =>

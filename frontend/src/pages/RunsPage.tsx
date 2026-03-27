@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { listRuns, createRun } from '../api/runs'
+import { listRuns, createRun, deleteRun } from '../api/runs'
 import { listDatasets } from '../api/datasets'
 import { listScorers } from '../api/scorers'
 import { listAdapters } from '../api/adapters'
@@ -22,6 +22,10 @@ export default function RunsPage() {
       return run
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['runs'] }); setShowForm(false) },
+  })
+  const deleteMut = useMutation({
+    mutationFn: deleteRun,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
   })
 
   const [showForm, setShowForm] = useState(false)
@@ -88,6 +92,8 @@ export default function RunsPage() {
                 {r.status === 'completed' && (
                   <Link to={`/runs/${r.id}`} className={styles.btnSmall}>View</Link>
                 )}
+                {' '}
+                <button className={styles.btnDanger} onClick={() => { if (confirm(`Delete run #${r.id} and all its results?`)) deleteMut.mutate(r.id) }}>Delete</button>
               </td>
             </tr>
           ))}

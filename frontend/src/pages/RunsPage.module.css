@@ -7,6 +7,8 @@
 .btnOutline { background: transparent; color: #818cf8; border: 1px solid #818cf8; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
 .btnOutline:hover { background: #1e1b4b; }
 .btnSmall { background: #334155; color: #e2e8f0; border: none; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; text-decoration: none; }
+.btnDanger { background: #dc2626; color: white; border: none; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.btnDanger:hover { background: #ef4444; }
 .form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
 .form input, .form select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 0.5rem; border-radius: 4px; }
 .table { width: 100%; border-collapse: collapse; }

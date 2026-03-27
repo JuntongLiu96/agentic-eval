@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listAdapters, createAdapter, deleteAdapter, healthCheckAdapter } from '../api/adapters'
-import type { AdapterCreate } from '../types'
+import { listAdapters, createAdapter, updateAdapter, deleteAdapter, healthCheckAdapter } from '../api/adapters'
+import type { Adapter, AdapterCreate } from '../types'
 import styles from './AdaptersPage.module.css'
 
 export default function AdaptersPage() {
@@ -11,21 +11,45 @@ export default function AdaptersPage() {
     mutationFn: createAdapter,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['adapters'] }); setShowForm(false) },
   })
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<AdapterCreate> }) => updateAdapter(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['adapters'] }); setEditingId(null) },
+  })
   const deleteMut = useMutation({
     mutationFn: deleteAdapter,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adapters'] }),
   })
   const [healthResults, setHealthResults] = useState<Record<number, { healthy: boolean; error?: string }>>({})
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<AdapterCreate & { configStr: string }>({
     name: '', adapter_type: 'http', config: {}, description: '', configStr: '{}',
   })
+  const [editForm, setEditForm] = useState({ name: '', configStr: '', description: '' })
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
       const config = JSON.parse(form.configStr)
       createMut.mutate({ name: form.name, adapter_type: form.adapter_type, config, description: form.description })
+    } catch { alert('Invalid JSON in config') }
+  }
+
+  function startEdit(a: Adapter) {
+    setEditingId(a.id)
+    setEditForm({
+      name: a.name,
+      configStr: JSON.stringify(a.config, null, 2),
+      description: a.description,
+    })
+  }
+
+  function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (editingId === null) return
+    try {
+      const config = JSON.parse(editForm.configStr)
+      updateMut.mutate({ id: editingId, data: { name: editForm.name, config, description: editForm.description } })
     } catch { alert('Invalid JSON in config') }
   }
 
@@ -65,23 +89,42 @@ export default function AdaptersPage() {
         </thead>
         <tbody>
           {adapters?.map(a => (
-            <tr key={a.id}>
-              <td>{a.id}</td>
-              <td>{a.name}</td>
-              <td>{a.adapter_type}</td>
-              <td>{a.description}</td>
-              <td>
-                <button className={styles.btnSmall} onClick={() => runHealthCheck(a.id)}>Check</button>
-                {healthResults[a.id] && (
-                  <span className={healthResults[a.id].healthy ? styles.healthy : styles.unhealthy}>
-                    {healthResults[a.id].healthy ? ' ✓' : ` ✗ ${healthResults[a.id].error || ''}`}
-                  </span>
-                )}
-              </td>
-              <td>
-                <button className={styles.btnDanger} onClick={() => { if (confirm('Delete?')) deleteMut.mutate(a.id) }}>Delete</button>
-              </td>
-            </tr>
+            editingId === a.id ? (
+              <tr key={a.id}>
+                <td>{a.id}</td>
+                <td colSpan={5}>
+                  <form onSubmit={handleEditSubmit} className={styles.editForm}>
+                    <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" />
+                    <input value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} placeholder="Description" />
+                    <textarea value={editForm.configStr} onChange={e => setEditForm({ ...editForm, configStr: e.target.value })} rows={4} />
+                    <div className={styles.editActions}>
+                      <button type="submit" className={styles.btn} disabled={updateMut.isPending}>Save</button>
+                      <button type="button" className={styles.btnSmall} onClick={() => setEditingId(null)}>Cancel</button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            ) : (
+              <tr key={a.id}>
+                <td>{a.id}</td>
+                <td>{a.name}</td>
+                <td>{a.adapter_type}</td>
+                <td>{a.description}</td>
+                <td>
+                  <button className={styles.btnSmall} onClick={() => runHealthCheck(a.id)}>Check</button>
+                  {healthResults[a.id] && (
+                    <span className={healthResults[a.id].healthy ? styles.healthy : styles.unhealthy}>
+                      {healthResults[a.id].healthy ? ' ✓' : ` ✗ ${healthResults[a.id].error || ''}`}
+                    </span>
+                  )}
+                </td>
+                <td>
+                  <button className={styles.btnSmall} onClick={() => startEdit(a)}>Edit</button>
+                  {' '}
+                  <button className={styles.btnDanger} onClick={() => { if (confirm('Delete?')) deleteMut.mutate(a.id) }}>Delete</button>
+                </td>
+              </tr>
+            )
           ))}
         </tbody>
       </table>
