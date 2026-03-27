@@ -58,6 +58,27 @@ class TestAdaptersCreateCmd:
         assert "my-adapter" in result.stdout
 
 
+class TestAdaptersUpdateCmd:
+    @patch("cli.adapters.ApiClient")
+    def test_update_config(self, MockClient):
+        mock = MockClient.return_value
+        mock.put.return_value = {
+            "id": 1, "name": "my-adapter", "adapter_type": "http",
+            "config": {"base_url": "http://localhost:3000", "auth_token": "Bearer new-token"},
+            "description": "updated", "created_at": "2026-01-01"
+        }
+        result = runner.invoke(app, ["adapters", "update", "1",
+                                     "--config", '{"base_url": "http://localhost:3000", "auth_token": "Bearer new-token"}'])
+        assert result.exit_code == 0
+        assert "Updated" in result.stdout
+
+    @patch("cli.adapters.ApiClient")
+    def test_update_nothing(self, MockClient):
+        result = runner.invoke(app, ["adapters", "update", "1"])
+        assert result.exit_code == 0
+        assert "Nothing to update" in result.stdout
+
+
 class TestAdaptersDeleteCmd:
     @patch("cli.adapters.ApiClient")
     def test_delete_adapter(self, MockClient):

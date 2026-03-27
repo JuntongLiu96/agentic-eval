@@ -58,6 +58,30 @@ async def test_get_run_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_delete_run(client):
+    ds = await client.post("/api/datasets", json={"name": "DS"})
+    scorer = await client.post("/api/scorers", json={
+        "name": "S", "eval_prompt": "test",
+    })
+    adapter = await client.post("/api/adapters", json={
+        "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},
+    })
+    run = await client.post("/api/runs", json={
+        "dataset_id": ds.json()["id"], "scorer_id": scorer.json()["id"], "adapter_id": adapter.json()["id"],
+    })
+    run_id = run.json()["id"]
+    response = await client.delete(f"/api/runs/{run_id}")
+    assert response.status_code == 204
+    get_resp = await client.get(f"/api/runs/{run_id}")
+    assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_run_not_found(client):
+    assert (await client.delete("/api/runs/999")).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_start_run_with_mock(client):
     """Full integration test: create all resources, start run with mocked bridge+judge."""
     ds = await client.post("/api/datasets", json={"name": "DS"})

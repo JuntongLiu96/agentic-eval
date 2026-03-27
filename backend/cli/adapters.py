@@ -62,6 +62,31 @@ def create_adapter(
     console.print(f"[green]Created adapter #{a['id']}: {a['name']}[/green]")
 
 
+@adapters_app.command("update")
+def update_adapter(
+    adapter_id: int = typer.Argument(..., help="Adapter ID"),
+    name: str = typer.Option(None, "--name", "-n", help="New adapter name"),
+    adapter_type: str = typer.Option(None, "--type", "-t", help="New type: http, python, stdio"),
+    config_json: str = typer.Option(None, "--config", "-c", help="New config as JSON string"),
+    description: str = typer.Option(None, "--description", "-d", help="New description"),
+):
+    """Update an existing adapter's config."""
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if adapter_type is not None:
+        payload["adapter_type"] = adapter_type
+    if config_json is not None:
+        payload["config"] = parse_json_arg(config_json, "--config")
+    if description is not None:
+        payload["description"] = description
+    if not payload:
+        console.print("[yellow]Nothing to update. Provide at least one option.[/yellow]")
+        return
+    a = _client().put(f"/api/adapters/{adapter_id}", json=payload)
+    console.print(f"[green]Updated adapter #{a['id']}: {a['name']}[/green]")
+
+
 @adapters_app.command("delete")
 def delete_adapter(
     adapter_id: int = typer.Argument(..., help="Adapter ID"),

@@ -117,6 +117,16 @@ class TestRunsExportCmd:
         assert "results.csv" in result.stdout
 
 
+class TestRunsDeleteCmd:
+    @patch("cli.runs.ApiClient")
+    def test_delete_run(self, MockClient):
+        mock = MockClient.return_value
+        mock.delete.return_value = None
+        result = runner.invoke(app, ["runs", "delete", "1", "--yes"])
+        assert result.exit_code == 0
+        assert "Deleted" in result.stdout
+
+
 class TestTopLevelRunCmd:
     @patch("cli.main.ApiClient")
     def test_run_creates_and_starts(self, MockClient):

@@ -72,6 +72,20 @@ def create_run(
     console.print(f"[green]Created run #{r['id']}: {r.get('name', '')} (status: {r.get('status', 'pending')})[/green]")
 
 
+@runs_app.command("delete")
+def delete_run(
+    run_id: int = typer.Argument(..., help="Run ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Delete an eval run and all its results."""
+    if not yes:
+        confirm = typer.confirm(f"Delete run {run_id} and all its results?")
+        if not confirm:
+            raise typer.Abort()
+    _client().delete(f"/api/runs/{run_id}")
+    console.print(f"[green]Deleted run {run_id}.[/green]")
+
+
 @runs_app.command("start")
 def start_run(run_id: int = typer.Argument(..., help="Run ID to start")):
     """Start an eval run. Blocks until the run completes."""

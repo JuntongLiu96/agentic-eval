@@ -72,6 +72,15 @@ async def get_run(run_id: int, db: AsyncSession = Depends(get_db)):
     return run
 
 
+@router.delete("/runs/{run_id}", status_code=204)
+async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
+    run = await db.get(EvalRun, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    await db.delete(run)
+    await db.commit()
+
+
 @router.post("/runs/{run_id}/start")
 async def start_run(run_id: int, db: AsyncSession = Depends(get_db)):
     run = await db.get(EvalRun, run_id)
