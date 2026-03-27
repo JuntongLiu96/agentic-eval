@@ -155,9 +155,9 @@ agenticeval adapters create \
   --config '{"base_url": "http://localhost:5000"}'
 ```
 
-> **PowerShell users:** PowerShell may strip quotes from JSON arguments. The CLI automatically repairs common PowerShell-mangled JSON (e.g. `{base_url: http://localhost:5000}`), so this should work in most cases. If you still get errors, use escaped double quotes:
+> **PowerShell users:** PowerShell strips inner quotes from JSON arguments. The CLI automatically repairs this, so just use single quotes:
 > ```powershell
-> agenticeval adapters create --name "my-api-agent" --type http --config "{\"base_url\": \"http://localhost:5000\"}"
+> agenticeval adapters create --name "my-api-agent" --type http --config '{"base_url": "http://localhost:5000"}'
 > ```
 
 Or via the web dashboard: go to **Adapters → + New Adapter**.
