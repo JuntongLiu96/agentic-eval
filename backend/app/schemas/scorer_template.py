@@ -10,7 +10,6 @@ class ScorerTemplateResponse(BaseModel):
     description: str
     category: str
     template_prompt: str
-    output_format: str
     example_scorer: dict[str, Any]
     usage_instructions: str
 

@@ -1,7 +1,6 @@
 name: Response Quality
 description: General quality rubric scoring accuracy, completeness, and helpfulness
 category: response-quality
-output_format: rubric
 template_prompt: |
   You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
   The scorer uses a multi-dimensional rubric to rate the quality of an AI agent's response.

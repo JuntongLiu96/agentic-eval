@@ -1,7 +1,6 @@
 name: E2E Flow Completion
 description: Evaluates whether the agent completed a multi-step workflow end-to-end
 category: e2e-flow
-output_format: numeric
 template_prompt: |
   You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
   The scorer evaluates whether an AI agent completed a multi-step workflow from start to finish.

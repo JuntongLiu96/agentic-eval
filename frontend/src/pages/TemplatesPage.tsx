@@ -22,7 +22,7 @@ export default function TemplatesPage() {
           <div key={t.id} className={styles.card}>
             <div className={styles.cardHeader}>
               <h3>{t.name}</h3>
-              <span className={styles.badge}>{t.output_format}</span>
+              <span className={styles.badge}>{t.category}</span>
             </div>
             <p className={styles.category}>{t.category}</p>
             <p className={styles.desc}>{t.description}</p>

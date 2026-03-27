@@ -25,7 +25,6 @@ async def seed_scorer_templates(db: AsyncSession) -> None:
             description=data["description"],
             category=data["category"],
             template_prompt=data["template_prompt"],
-            output_format=data["output_format"],
             example_scorer=json.dumps(data["example_scorer"]),
             usage_instructions=data["usage_instructions"],
         )

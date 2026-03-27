@@ -12,6 +12,5 @@ class ScorerTemplate(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     template_prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    output_format: Mapped[str] = mapped_column(String(50), nullable=False)
     example_scorer: Mapped[str] = mapped_column(Text, nullable=False)  # JSON string
     usage_instructions: Mapped[str] = mapped_column(Text, default="")

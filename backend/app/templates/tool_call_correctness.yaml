@@ -1,7 +1,6 @@
 name: Tool Call Correctness
 description: Evaluates whether the agent called the correct tool with the right parameters
 category: tool-correctness
-output_format: numeric
 template_prompt: |
   You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
   The scorer evaluates whether an AI agent called the correct tool with the correct parameters.

@@ -59,7 +59,6 @@ export interface ScorerTemplate {
   description: string
   category: string
   template_prompt: string
-  output_format: string
   example_scorer: Record<string, unknown>
   usage_instructions: string
 }
