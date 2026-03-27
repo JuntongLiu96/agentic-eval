@@ -3,7 +3,7 @@ import json
 import typer
 from rich.console import Console
 from rich.table import Table
-from cli.api_client import ApiClient, state
+from cli.api_client import ApiClient, state, parse_json_arg
 
 scorers_app = typer.Typer(help="Manage scorers (evaluation criteria)")
 console = Console()
@@ -61,11 +61,7 @@ def create_scorer(
 ):
     """Create a new scorer."""
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    try:
-        criteria = json.loads(criteria_json)
-    except json.JSONDecodeError:
-        console.print("[red]Invalid JSON in --criteria[/red]")
-        raise typer.Exit(1)
+    criteria = parse_json_arg(criteria_json, "--criteria")
     payload = {
         "name": name, "description": description, "output_format": output_format,
         "eval_prompt": eval_prompt, "criteria": criteria, "tags": tag_list,

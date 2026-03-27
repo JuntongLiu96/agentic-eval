@@ -4,7 +4,7 @@ import json as json_mod
 import typer
 from rich.console import Console
 
-from cli.api_client import ApiClient, state
+from cli.api_client import ApiClient, state, parse_json_arg
 
 app = typer.Typer(
     name="agenticeval",
@@ -33,11 +33,7 @@ def run_eval(
 ):
     """Create and immediately start an eval run (shortcut)."""
     client = ApiClient(base_url=state["base_url"])
-    try:
-        judge_config = json_mod.loads(judge_config_json)
-    except json_mod.JSONDecodeError:
-        _console.print("[red]Invalid JSON in --judge-config[/red]")
-        raise typer.Exit(1)
+    judge_config = parse_json_arg(judge_config_json, "--judge-config")
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
                "name": name, "judge_config": judge_config}
     r = client.post("/api/runs", json=payload)

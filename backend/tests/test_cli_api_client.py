@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
 import httpx
-from cli.api_client import ApiClient
+from cli.api_client import ApiClient, parse_json_arg
 
 
 class TestApiClient:
@@ -110,3 +110,23 @@ class TestApiClient:
         client = ApiClient()
         client.download("/api/datasets/1/export", output_path="out.csv")
         mock_get.assert_called_once()
+
+
+class TestParseJsonArg:
+    def test_valid_json(self):
+        result = parse_json_arg('{"base_url": "http://localhost:8000"}')
+        assert result == {"base_url": "http://localhost:8000"}
+
+    def test_powershell_mangled_json(self):
+        # PowerShell strips inner quotes: {base_url: http://localhost:8000}
+        result = parse_json_arg('{base_url: http://localhost:8000}')
+        assert result == {"base_url": "http://localhost:8000"}
+
+    def test_powershell_mangled_multiple_keys(self):
+        result = parse_json_arg('{command: python, timeout_seconds: 300}')
+        assert result["command"] == "python"
+        assert result["timeout_seconds"] == 300
+
+    def test_invalid_json_exits(self):
+        with pytest.raises(SystemExit):
+            parse_json_arg('not json at all')

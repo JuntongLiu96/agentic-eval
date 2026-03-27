@@ -1,4 +1,6 @@
 """Shared HTTP client for CLI commands. Wraps httpx sync calls."""
+import json
+import re
 import httpx
 import typer
 
@@ -7,6 +9,39 @@ DEFAULT_TIMEOUT = 30.0
 # Global CLI state — holds --base-url value. Shared across all subcommands.
 # Lives here (not in main.py) to avoid circular imports between main ↔ subcommands.
 state = {"base_url": "http://localhost:9100"}
+
+
+def parse_json_arg(text: str, arg_name: str = "--config") -> dict:
+    """Parse a JSON string from a CLI argument, handling PowerShell quoting issues.
+
+    PowerShell often mangles JSON by stripping inner quotes, turning
+    '{"base_url": "http://localhost:8000"}' into '{base_url: http://localhost:8000}'.
+    This function attempts to repair such mangled JSON before parsing.
+    """
+    # First try standard parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to repair PowerShell-mangled JSON: {key: value} → {"key": "value"}
+    repaired = text.strip()
+    # Add quotes around unquoted keys: {base_url: → {"base_url":
+    repaired = re.sub(r'{\s*(\w+)\s*:', r'{"\1":', repaired)
+    repaired = re.sub(r',\s*(\w+)\s*:', r', "\1":', repaired)
+    # Add quotes around unquoted string values (not numbers/bools/null)
+    # Match ': value' where value is not already quoted, not a number, not true/false/null
+    repaired = re.sub(
+        r':\s*(?!")((?:https?://)?[^\s,}]+)',
+        lambda m: ': "' + m.group(1) + '"' if not re.match(r'^(\d+\.?\d*|true|false|null)$', m.group(1)) else ': ' + m.group(1),
+        repaired,
+    )
+
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        typer.echo(f"Error: Invalid JSON in {arg_name}: {text}", err=True)
+        raise SystemExit(1)
 
 
 class ApiClient:

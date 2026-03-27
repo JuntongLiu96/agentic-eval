@@ -3,7 +3,7 @@ import json
 import typer
 from rich.console import Console
 from rich.table import Table
-from cli.api_client import ApiClient, state
+from cli.api_client import ApiClient, state, parse_json_arg
 
 runs_app = typer.Typer(help="Manage eval runs")
 console = Console()
@@ -65,11 +65,7 @@ def create_run(
                                           help="Judge config as JSON string"),
 ):
     """Create a new eval run (does not start it)."""
-    try:
-        judge_config = json.loads(judge_config_json)
-    except json.JSONDecodeError:
-        console.print("[red]Invalid JSON in --judge-config[/red]")
-        raise typer.Exit(1)
+    judge_config = parse_json_arg(judge_config_json, "--judge-config")
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
                "name": name, "judge_config": judge_config}
     r = _client().post("/api/runs", json=payload)

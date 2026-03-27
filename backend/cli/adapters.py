@@ -3,7 +3,7 @@ import json
 import typer
 from rich.console import Console
 from rich.table import Table
-from cli.api_client import ApiClient, state
+from cli.api_client import ApiClient, state, parse_json_arg
 
 adapters_app = typer.Typer(help="Manage bridge adapters")
 console = Console()
@@ -55,11 +55,7 @@ def create_adapter(
     description: str = typer.Option("", "--description", "-d", help="Description"),
 ):
     """Create a new adapter."""
-    try:
-        config = json.loads(config_json)
-    except json.JSONDecodeError:
-        console.print("[red]Invalid JSON in --config[/red]")
-        raise typer.Exit(1)
+    config = parse_json_arg(config_json, "--config")
     payload = {"name": name, "adapter_type": adapter_type,
                "config": config, "description": description}
     a = _client().post("/api/adapters", json=payload)
