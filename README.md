@@ -155,6 +155,11 @@ agenticeval adapters create \
   --config '{"base_url": "http://localhost:5000"}'
 ```
 
+> **PowerShell users:** Single quotes don't preserve JSON in PowerShell. Use escaped double quotes instead:
+> ```powershell
+> agenticeval adapters create --name "my-api-agent" --type http --config "{`"base_url`": `"http://localhost:5000`"}"
+> ```
+
 Or via the web dashboard: go to **Adapters → + New Adapter**.
 
 The full config object supports custom endpoint paths:

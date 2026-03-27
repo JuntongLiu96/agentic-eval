@@ -64,7 +64,7 @@ def create_scorer(
     try:
         criteria = json.loads(criteria_json)
     except json.JSONDecodeError:
-        console.print("[red]Invalid JSON in --criteria[/red]", err=True)
+        console.print("[red]Invalid JSON in --criteria[/red]")
         raise typer.Exit(1)
     payload = {
         "name": name, "description": description, "output_format": output_format,

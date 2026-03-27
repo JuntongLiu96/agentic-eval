@@ -58,7 +58,7 @@ def create_adapter(
     try:
         config = json.loads(config_json)
     except json.JSONDecodeError:
-        console.print("[red]Invalid JSON in --config[/red]", err=True)
+        console.print("[red]Invalid JSON in --config[/red]")
         raise typer.Exit(1)
     payload = {"name": name, "adapter_type": adapter_type,
                "config": config, "description": description}

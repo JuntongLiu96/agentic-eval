@@ -68,7 +68,7 @@ def create_run(
     try:
         judge_config = json.loads(judge_config_json)
     except json.JSONDecodeError:
-        console.print("[red]Invalid JSON in --judge-config[/red]", err=True)
+        console.print("[red]Invalid JSON in --judge-config[/red]")
         raise typer.Exit(1)
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
                "name": name, "judge_config": judge_config}

@@ -36,7 +36,7 @@ def run_eval(
     try:
         judge_config = json_mod.loads(judge_config_json)
     except json_mod.JSONDecodeError:
-        _console.print("[red]Invalid JSON in --judge-config[/red]", err=True)
+        _console.print("[red]Invalid JSON in --judge-config[/red]")
         raise typer.Exit(1)
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
                "name": name, "judge_config": judge_config}
