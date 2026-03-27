@@ -26,27 +26,35 @@ export default function RunDetailPage() {
     setIsRunning(true)
     setProgress([])
     try {
+      let receivedEvents = false
       const cleanup = streamRun(
         runId,
-        (event) => setProgress(prev => [...prev, JSON.stringify(event)]),
+        (event) => {
+          receivedEvents = true
+          setProgress(prev => [...prev, JSON.stringify(event)])
+        },
         () => {
           setIsRunning(false)
           refetchRun()
           queryClient.invalidateQueries({ queryKey: ['results', runId] })
         },
       )
-      // Fallback: if SSE doesn't connect, use direct start
+      // Fallback: if SSE doesn't connect after 5s, use direct start
       setTimeout(async () => {
-        if (progress.length === 0) {
+        if (!receivedEvents) {
           cleanup()
-          await startRun(runId)
+          try {
+            await startRun(runId)
+          } catch { /* run may already be started by stream */ }
           setIsRunning(false)
           refetchRun()
           queryClient.invalidateQueries({ queryKey: ['results', runId] })
         }
-      }, 3000)
+      }, 5000)
     } catch {
-      await startRun(runId)
+      try {
+        await startRun(runId)
+      } catch { /* ignore */ }
       setIsRunning(false)
       refetchRun()
       queryClient.invalidateQueries({ queryKey: ['results', runId] })

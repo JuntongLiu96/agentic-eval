@@ -13,9 +13,10 @@ export const exportRunUrl = (id: number) => apiDownloadUrl(`/runs/${id}/export`)
 
 export function streamRun(runId: number, onEvent: (event: Record<string, unknown>) => void, onDone: () => void) {
   const source = new EventSource(`/api/runs/${runId}/stream`)
-  source.addEventListener('progress', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
-  source.addEventListener('result', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
-  source.addEventListener('complete', (e) => { onEvent(JSON.parse((e as MessageEvent).data)); source.close(); onDone() })
+  source.addEventListener('run_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
+  source.addEventListener('case_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
+  source.addEventListener('case_completed', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
+  source.addEventListener('run_completed', (e) => { onEvent(JSON.parse((e as MessageEvent).data)); source.close(); onDone() })
   source.addEventListener('error', () => { source.close(); onDone() })
   return () => source.close()
 }

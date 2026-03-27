@@ -586,3 +586,19 @@ With the backend running, visit **http://localhost:9100/docs** for the auto-gene
 | CLI | Typer, Rich, httpx |
 | Testing | pytest, pytest-asyncio, httpx (test client) |
 | Judge LLM | OpenAI-compatible `/chat/completions` API |
+
+## Changelog
+
+### 2026-03-27 — SSE streaming fix
+
+**Bug:** The web dashboard showed no progress or results after starting an eval run. The run completed successfully in the backend, but the frontend never received the events.
+
+**Root cause:** SSE event name mismatch between backend and frontend:
+- Backend emitted: `run_started`, `case_started`, `case_completed`, `run_completed`
+- Frontend listened for: `progress`, `result`, `complete`
+
+Since no events matched, the frontend's 3-second fallback fired and called `POST /api/runs/{id}/start`, which returned `400` because the SSE stream had already started the run.
+
+**Fix:**
+- `frontend/src/api/runs.ts` — Updated `streamRun()` to listen for the correct event names (`run_started`, `case_started`, `case_completed`, `run_completed`)
+- `frontend/src/pages/RunDetailPage.tsx` — Fixed the fallback timeout race condition (used a local `receivedEvents` flag instead of stale React state, increased timeout to 5s, added try/catch around fallback `startRun`)
