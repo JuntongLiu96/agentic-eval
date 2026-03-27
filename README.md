@@ -73,7 +73,7 @@ The judge LLM uses the OpenAI-compatible `/chat/completions` endpoint, so it wor
 ```
 
 1. You create a **Dataset** with test cases (input data + expected results)
-2. You create a **Scorer** with evaluation criteria (prompts for the judge LLM)
+2. You create a **Scorer** with an eval prompt (scoring criteria, score range, and rules — all in one prompt)
 3. You configure a **Bridge Adapter** to connect to your agent
 4. You start an **Eval Run** — the system sends each test case to your agent, collects the output, and asks a judge LLM to score it
 
@@ -428,21 +428,33 @@ Go to **Datasets → + New Dataset**, then click into the dataset to import CSV 
 
 ## Creating Scorers
 
-Scorers define how the judge LLM evaluates your agent's output. Three output formats are supported:
+A scorer defines how the judge LLM evaluates your agent's output. The `eval_prompt` is the single source of truth — it contains everything: what to evaluate, scoring criteria, score range, and scoring rules.
 
-| Format | What the judge returns | Pass logic |
-|--------|----------------------|------------|
-| **binary** | `{"score": 0 or 1, "justification": "..."}` | Pass if score >= 1 |
-| **numeric** | `{"score": 85, "justification": "..."}` | Pass if score ≥ threshold (default 60%) |
-| **rubric** | `{"score": 4.5, "overall_score": 4.5, "justification": "..."}` | Pass if overall_score ≥ threshold |
+The judge LLM always returns:
+```json
+{"score": <number>, "justification": "<detailed explanation referencing the scoring criteria>"}
+```
+
+The system computes `passed = score >= pass_threshold` (default threshold: 60).
+
+### Example Scorer
+
+```json
+{
+  "name": "Booking Flow Correctness",
+  "eval_prompt": "Evaluate whether the agent completed the booking flow correctly.\n\nScoring criteria:\n- Found correct flight (30 points)\n- Called booking API with right params (40 points)\n- Confirmed booking to user (30 points)\n\nScore range: 0-100.\nReturn {\"score\": <0-100>, \"justification\": \"<explain which criteria were met/missed>\"}.",
+  "pass_threshold": 60,
+  "tags": ["e2e", "booking"]
+}
+```
 
 ### Via CLI
 
 ```bash
 agenticeval scorers create \
   --name "answer-correctness" \
-  --output-format binary \
-  --eval-prompt "Compare the agent's answer to the expected answer. Return {\"passed\": true} if they match semantically."
+  --eval-prompt "Compare the agent's answer to the expected answer. Score 0-100: 100 if semantically correct, 0 if wrong. Return {\"score\": <0-100>, \"justification\": \"<explain>\"}." \
+  --threshold 60
 ```
 
 ### Using Scorer Templates
