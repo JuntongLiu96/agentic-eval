@@ -12,48 +12,33 @@ template_prompt: |
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name>",
-    "output_format": "numeric",
-    "eval_prompt": "<instruction for the judge LLM to verify flow completion and score it>",
-    "criteria": {
-      "dimensions": [
-        {"name": "<step_name>", "description": "<what this step should accomplish>", "weight": <0.0-1.0>}
-      ]
-    },
-    "score_range": {"min": 0, "max": 100},
+    "eval_prompt": "<the full evaluation prompt — must include: workflow steps to check, scoring criteria, score range, and scoring rules>",
     "pass_threshold": 60,
     "tags": ["e2e"]
   }
 
-  The eval_prompt should instruct the judge to:
-  1. Check each workflow step against the agent's message list
-  2. Assign a score (0-100) based on how many steps were completed correctly
-  3. Provide a detailed justification explaining which steps succeeded/failed and why
+  The eval_prompt should contain EVERYTHING the judge needs:
+  - What workflow steps to check
+  - How many points each step is worth
+  - Score range (e.g. "Score 0-100")
+  - Output format instruction: Return {"score": <0-100>, "justification": "<explanation>"}
 
   The workflow I want to evaluate is: [DESCRIBE YOUR WORKFLOW HERE]
 usage_instructions: >
   Copy the template prompt, paste it into your coding agent, and replace
   [DESCRIBE YOUR WORKFLOW HERE] with the multi-step workflow you want to evaluate.
-  The generated scorer will produce a 0-100 score with detailed justification.
 example_scorer:
   name: File Creation Flow
-  output_format: numeric
   eval_prompt: >
     Evaluate whether the agent completed the file creation workflow.
-    Score based on: template read (30 points), variables filled correctly (40 points),
-    output file written (30 points).
+
+    Scoring criteria:
+    - Template read (30 points): Agent read the template file
+    - Variables filled (40 points): All template variables were replaced with correct values
+    - File written (30 points): Output file was created successfully
+
+    Score range: 0-100.
     Return {"score": <0-100>, "justification": "<explain which steps were completed>"}.
-  criteria:
-    dimensions:
-      - name: template_read
-        description: Agent read the template file
-        weight: 0.3
-      - name: variables_filled
-        description: All template variables were replaced with correct values
-        weight: 0.4
-      - name: file_written
-        description: Output file was created successfully
-        weight: 0.3
-  score_range: { min: 0, max: 100 }
   pass_threshold: 60
   tags:
     - e2e

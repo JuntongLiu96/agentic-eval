@@ -37,10 +37,7 @@ export interface Scorer {
   id: number
   name: string
   description: string
-  output_format: string
   eval_prompt: string
-  criteria: Record<string, unknown>
-  score_range: Record<string, unknown>
   pass_threshold: number | null
   tags: string[]
   created_at: string
@@ -50,10 +47,7 @@ export interface Scorer {
 export interface ScorerCreate {
   name: string
   description?: string
-  output_format: string
   eval_prompt: string
-  criteria: Record<string, unknown>
-  score_range?: Record<string, unknown>
   pass_threshold?: number | null
   tags?: string[]
 }

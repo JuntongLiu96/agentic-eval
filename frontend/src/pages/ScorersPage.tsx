@@ -18,7 +18,7 @@ export default function ScorersPage() {
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<ScorerCreate>({
-    name: '', description: '', output_format: 'binary', eval_prompt: '', criteria: {}, tags: [],
+    name: '', description: '', eval_prompt: '', pass_threshold: 60, tags: [],
   })
 
   function handleSubmit(e: React.FormEvent) {
@@ -41,27 +41,22 @@ export default function ScorersPage() {
         <form onSubmit={handleSubmit} className={styles.form}>
           <input placeholder="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
           <input placeholder="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <select value={form.output_format} onChange={e => setForm({ ...form, output_format: e.target.value })}>
-            <option value="binary">Binary</option>
-            <option value="numeric">Numeric</option>
-            <option value="rubric">Rubric</option>
-          </select>
-          <textarea placeholder="Eval prompt..." value={form.eval_prompt} onChange={e => setForm({ ...form, eval_prompt: e.target.value })} required rows={3} />
+          <textarea placeholder="Eval prompt (include criteria, score range, and scoring rules)..." value={form.eval_prompt} onChange={e => setForm({ ...form, eval_prompt: e.target.value })} required rows={6} />
+          <input type="number" placeholder="Pass threshold" value={form.pass_threshold ?? 60} onChange={e => setForm({ ...form, pass_threshold: Number(e.target.value) })} />
           <button type="submit" className={styles.btn} disabled={createMut.isPending}>Create</button>
         </form>
       )}
 
       <table className={styles.table}>
         <thead>
-          <tr><th>ID</th><th>Name</th><th>Format</th><th>Threshold</th><th>Tags</th><th>Actions</th></tr>
+          <tr><th>ID</th><th>Name</th><th>Threshold</th><th>Tags</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {scorers?.map(s => (
             <tr key={s.id}>
               <td>{s.id}</td>
               <td>{s.name}</td>
-              <td>{s.output_format}</td>
-              <td>{s.pass_threshold ?? 'default'}</td>
+              <td>{s.pass_threshold ?? 60}</td>
               <td>{s.tags.join(', ')}</td>
               <td>
                 <button className={styles.btnDanger} onClick={() => { if (confirm('Delete?')) deleteMut.mutate(s.id) }}>Delete</button>

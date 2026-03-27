@@ -16,10 +16,7 @@ async def create_scorer(payload: ScorerCreate, db: AsyncSession = Depends(get_db
     scorer = Scorer(
         name=payload.name,
         description=payload.description,
-        output_format=payload.output_format,
         eval_prompt=payload.eval_prompt,
-        criteria=json.dumps(payload.criteria),
-        score_range=json.dumps(payload.score_range),
         pass_threshold=payload.pass_threshold,
         tags=json.dumps(payload.tags),
     )
@@ -54,14 +51,8 @@ async def update_scorer(
         scorer.name = payload.name
     if payload.description is not None:
         scorer.description = payload.description
-    if payload.output_format is not None:
-        scorer.output_format = payload.output_format
     if payload.eval_prompt is not None:
         scorer.eval_prompt = payload.eval_prompt
-    if payload.criteria is not None:
-        scorer.criteria = json.dumps(payload.criteria)
-    if payload.score_range is not None:
-        scorer.score_range = json.dumps(payload.score_range)
     if payload.pass_threshold is not None:
         scorer.pass_threshold = payload.pass_threshold
     if payload.tags is not None:

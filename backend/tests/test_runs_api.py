@@ -7,8 +7,7 @@ from app.bridge.base import AgentResult
 async def test_create_run(client):
     ds = await client.post("/api/datasets", json={"name": "DS"})
     scorer = await client.post("/api/scorers", json={
-        "name": "S", "output_format": "binary", "eval_prompt": "test",
-        "criteria": {"conditions": [], "pass_rule": "all"},
+        "name": "S", "eval_prompt": "test",
     })
     adapter = await client.post("/api/adapters", json={
         "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},
@@ -24,8 +23,7 @@ async def test_create_run(client):
 async def test_list_runs(client):
     ds = await client.post("/api/datasets", json={"name": "DS"})
     scorer = await client.post("/api/scorers", json={
-        "name": "S", "output_format": "binary", "eval_prompt": "test",
-        "criteria": {"conditions": [], "pass_rule": "all"},
+        "name": "S", "eval_prompt": "test",
     })
     adapter = await client.post("/api/adapters", json={
         "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},
@@ -42,8 +40,7 @@ async def test_list_runs(client):
 async def test_get_run(client):
     ds = await client.post("/api/datasets", json={"name": "DS"})
     scorer = await client.post("/api/scorers", json={
-        "name": "S", "output_format": "binary", "eval_prompt": "test",
-        "criteria": {"conditions": [], "pass_rule": "all"},
+        "name": "S", "eval_prompt": "test",
     })
     adapter = await client.post("/api/adapters", json={
         "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},
@@ -69,8 +66,8 @@ async def test_start_run_with_mock(client):
         "name": "TC1", "data": {"prompt": "2+2?"}, "expected_result": {"answer": "4"},
     })
     scorer = await client.post("/api/scorers", json={
-        "name": "S", "output_format": "binary", "eval_prompt": "Check answer",
-        "criteria": {"conditions": [{"name": "correct", "description": "Correct"}], "pass_rule": "all"},
+        "name": "S", "eval_prompt": "Check answer.\nScore 0-1: 1 if correct, 0 if wrong.\nReturn {\"score\": <0-1>, \"justification\": \"<why>\"}.",
+        "pass_threshold": 1,
     })
     adapter = await client.post("/api/adapters", json={
         "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},

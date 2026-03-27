@@ -12,22 +12,16 @@ template_prompt: |
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name for your eval>",
-    "output_format": "numeric",
-    "eval_prompt": "<instruction for the judge LLM explaining what to evaluate and how to score>",
-    "criteria": {
-      "dimensions": [
-        {"name": "<what to check>", "description": "<detailed description>", "weight": <0.0-1.0>}
-      ]
-    },
-    "score_range": {"min": 0, "max": 100},
+    "eval_prompt": "<the full evaluation prompt — must include: what to evaluate, scoring criteria, score range, and scoring rules>",
     "pass_threshold": 60,
     "tags": ["tool"]
   }
 
-  The eval_prompt should instruct the judge to:
-  1. Check each criterion against the agent's output
-  2. Assign a numeric score (0-100) based on how many criteria were met
-  3. Provide a detailed justification explaining which criteria passed/failed and why
+  The eval_prompt should contain EVERYTHING the judge needs:
+  - What to evaluate (e.g. "check if the agent called the correct tool")
+  - Scoring criteria (e.g. "correct tool name: 50 points, correct params: 50 points")
+  - Score range (e.g. "Score 0-100")
+  - Output format instruction: Return {"score": <0-100>, "justification": "<explanation>"}
 
   The tool I want to evaluate is: [DESCRIBE YOUR TOOL HERE]
 usage_instructions: >
@@ -36,24 +30,15 @@ usage_instructions: >
   The generated scorer will produce a 0-100 score with detailed justification.
 example_scorer:
   name: Search Tool Correctness
-  output_format: numeric
   eval_prompt: >
     Evaluate whether the agent called the search tool correctly.
-    Score 0-100 based on: correct tool name (40 points), correct parameters (40 points),
-    appropriate usage context (20 points).
-    Return {"score": <0-100>, "justification": "<explain which aspects were correct/incorrect>"}.
-  criteria:
-    dimensions:
-      - name: correct_tool_called
-        description: Agent called the 'search' tool (not a different tool)
-        weight: 0.4
-      - name: params_match
-        description: Query parameter matches the expected search term
-        weight: 0.4
-      - name: appropriate_context
-        description: Tool was called at the right point in the conversation
-        weight: 0.2
-  score_range: { min: 0, max: 100 }
+
+    Scoring criteria:
+    - Correct tool called (50 points): Agent called the 'search' tool, not a different tool
+    - Correct parameters (50 points): Query parameter matches the expected search term
+
+    Score range: 0-100.
+    Return {"score": <0-100>, "justification": "<explain which criteria were met/missed>"}.
   pass_threshold: 60
   tags:
     - tool

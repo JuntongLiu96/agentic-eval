@@ -7,63 +7,38 @@ template_prompt: |
   The scorer uses a multi-dimensional rubric to rate the quality of an AI agent's response.
 
   The judge LLM will receive the agent's full message list and must return:
-  {
-    "score": <overall_numeric_score>,
-    "overall_score": <same as score>,
-    "dimensions": [
-      {"name": "<dimension>", "score": <number>, "justification": "<why this score>"}
-    ],
-    "justification": "<overall justification referencing each dimension>"
-  }
+  {"score": <number>, "justification": "<detailed explanation>"}
 
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name>",
-    "output_format": "rubric",
-    "eval_prompt": "<instruction for the judge LLM to rate response quality on each dimension>",
-    "criteria": {
-      "dimensions": [
-        {"name": "<dimension>", "description": "<what to evaluate>", "scale": {"min": 1, "max": 5}}
-      ],
-      "aggregation": "average"
-    },
-    "score_range": {"min": 1, "max": 5},
+    "eval_prompt": "<the full evaluation prompt — must include: dimensions to rate, scale for each, how to compute overall score, and scoring rules>",
     "pass_threshold": 3.0,
     "tags": ["quality"]
   }
 
-  The eval_prompt should instruct the judge to:
-  1. Score each dimension independently on the given scale
-  2. Compute an overall score (average of dimensions)
-  3. Provide a detailed justification for each dimension score and the overall score
+  The eval_prompt should contain EVERYTHING the judge needs:
+  - Dimensions to evaluate (e.g. correctness, completeness, helpfulness)
+  - Scale for each dimension (e.g. 1-5)
+  - How to compute overall score (e.g. average of dimensions)
+  - Output format instruction: Return {"score": <overall>, "justification": "<per-dimension assessment>"}
 
   The task I want to evaluate responses for is: [DESCRIBE YOUR TASK HERE]
 usage_instructions: >
   Copy the template prompt, paste it into your coding agent, and replace
   [DESCRIBE YOUR TASK HERE] with the task whose response quality you want to evaluate.
-  The generated scorer will produce per-dimension scores and an overall score with justification.
 example_scorer:
   name: General Response Quality
-  output_format: rubric
   eval_prompt: >
-    Rate the agent's response on each dimension (1-5 scale).
-    For each dimension, provide a score and justification.
-    Return {"score": <average>, "overall_score": <average>,
-    "dimensions": [{"name": "...", "score": N, "justification": "..."}],
-    "justification": "<overall assessment>"}.
-  criteria:
-    dimensions:
-      - name: correctness
-        description: Is the response factually accurate?
-        scale: { min: 1, max: 5 }
-      - name: completeness
-        description: Does the response address all parts of the request?
-        scale: { min: 1, max: 5 }
-      - name: helpfulness
-        description: Is the response useful and actionable?
-        scale: { min: 1, max: 5 }
-    aggregation: average
-  score_range: { min: 1, max: 5 }
+    Rate the agent's response on each dimension (1-5 scale):
+
+    Dimensions:
+    - Correctness: Is the response factually accurate? (1=completely wrong, 5=perfectly correct)
+    - Completeness: Does the response address all parts of the request? (1=missed everything, 5=fully addressed)
+    - Helpfulness: Is the response useful and actionable? (1=useless, 5=extremely helpful)
+
+    Overall score = average of all dimensions.
+    Return {"score": <average 1-5>, "justification": "<explain each dimension score>"}.
   pass_threshold: 3.0
   tags:
     - quality

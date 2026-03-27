@@ -10,9 +10,8 @@ class TestScorersListCmd:
     def test_list_scorers(self, MockClient):
         mock = MockClient.return_value
         mock.get.return_value = [
-            {"id": 1, "name": "sc1", "description": "test", "output_format": "binary",
-             "eval_prompt": "...", "criteria": {}, "score_range": None,
-             "pass_threshold": None, "tags": [],
+            {"id": 1, "name": "sc1", "description": "test",
+             "eval_prompt": "Score 0-100...", "pass_threshold": 60, "tags": [],
              "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}
         ]
         result = runner.invoke(app, ["scorers", "list"])
@@ -33,9 +32,8 @@ class TestScorersGetCmd:
     def test_get_scorer(self, MockClient):
         mock = MockClient.return_value
         mock.get.return_value = {
-            "id": 1, "name": "sc1", "description": "desc", "output_format": "binary",
-            "eval_prompt": "Judge this", "criteria": {"conditions": []},
-            "score_range": None, "pass_threshold": None, "tags": ["a"],
+            "id": 1, "name": "sc1", "description": "desc",
+            "eval_prompt": "Judge this agent's output", "pass_threshold": 60, "tags": ["a"],
             "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"
         }
         result = runner.invoke(app, ["scorers", "get", "1"])
@@ -49,11 +47,9 @@ class TestScorersCreateCmd:
     def test_create_scorer(self, MockClient):
         mock = MockClient.return_value
         mock.post.return_value = {"id": 5, "name": "new-scorer", "description": "new",
-                                  "output_format": "binary", "eval_prompt": "judge",
-                                  "criteria": {}, "score_range": None, "pass_threshold": None,
+                                  "eval_prompt": "judge", "pass_threshold": 60,
                                   "tags": [], "created_at": "2026-01-01", "updated_at": "2026-01-01"}
         result = runner.invoke(app, ["scorers", "create", "--name", "new-scorer",
-                                     "--output-format", "binary",
                                      "--eval-prompt", "judge"])
         assert result.exit_code == 0
         assert "new-scorer" in result.stdout

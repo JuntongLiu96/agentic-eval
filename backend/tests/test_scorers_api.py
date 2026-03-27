@@ -1,49 +1,34 @@
 import pytest
 
-BINARY_SCORER = {
+SCORER_A = {
     "name": "Tool Correctness",
     "description": "Checks if agent called the right tool",
-    "output_format": "binary",
-    "eval_prompt": "Evaluate whether the agent called the correct tool.",
-    "criteria": {
-        "conditions": [
-            {"name": "correct_tool", "description": "Called expected tool"}
-        ],
-        "pass_rule": "all",
-    },
+    "eval_prompt": "Evaluate whether the agent called the correct tool with the correct parameters.\nScore 0-100: correct tool (50 points), correct params (50 points).\nReturn {\"score\": <0-100>, \"justification\": \"<detailed explanation>\"}.",
+    "pass_threshold": 60,
     "tags": ["tool", "correctness"],
 }
 
-RUBRIC_SCORER = {
+SCORER_B = {
     "name": "Response Quality",
-    "output_format": "rubric",
-    "eval_prompt": "Rate the response quality.",
-    "criteria": {
-        "dimensions": [
-            {"name": "correctness", "description": "Factual accuracy", "scale": {"min": 1, "max": 5}},
-            {"name": "completeness", "description": "Covers all parts", "scale": {"min": 1, "max": 5}},
-        ],
-        "aggregation": "average",
-    },
-    "score_range": {"min": 1, "max": 5},
+    "eval_prompt": "Rate the response on correctness (1-5) and completeness (1-5).\nOverall score = average.\nReturn {\"score\": <1-5>, \"justification\": \"<detailed explanation>\"}.",
     "pass_threshold": 3.0,
 }
 
 
 @pytest.mark.asyncio
 async def test_create_scorer(client):
-    response = await client.post("/api/scorers", json=BINARY_SCORER)
+    response = await client.post("/api/scorers", json=SCORER_A)
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "Tool Correctness"
-    assert data["output_format"] == "binary"
-    assert data["criteria"]["pass_rule"] == "all"
+    assert data["pass_threshold"] == 60
+    assert "correct tool" in data["eval_prompt"]
 
 
 @pytest.mark.asyncio
 async def test_list_scorers(client):
-    await client.post("/api/scorers", json=BINARY_SCORER)
-    await client.post("/api/scorers", json=RUBRIC_SCORER)
+    await client.post("/api/scorers", json=SCORER_A)
+    await client.post("/api/scorers", json=SCORER_B)
     response = await client.get("/api/scorers")
     assert response.status_code == 200
     assert len(response.json()) == 2
@@ -51,7 +36,7 @@ async def test_list_scorers(client):
 
 @pytest.mark.asyncio
 async def test_get_scorer(client):
-    create_resp = await client.post("/api/scorers", json=BINARY_SCORER)
+    create_resp = await client.post("/api/scorers", json=SCORER_A)
     scorer_id = create_resp.json()["id"]
     response = await client.get(f"/api/scorers/{scorer_id}")
     assert response.status_code == 200
@@ -66,7 +51,7 @@ async def test_get_scorer_not_found(client):
 
 @pytest.mark.asyncio
 async def test_update_scorer(client):
-    create_resp = await client.post("/api/scorers", json=BINARY_SCORER)
+    create_resp = await client.post("/api/scorers", json=SCORER_A)
     scorer_id = create_resp.json()["id"]
     response = await client.put(
         f"/api/scorers/{scorer_id}", json={"name": "Updated Name"}
@@ -77,7 +62,7 @@ async def test_update_scorer(client):
 
 @pytest.mark.asyncio
 async def test_delete_scorer(client):
-    create_resp = await client.post("/api/scorers", json=BINARY_SCORER)
+    create_resp = await client.post("/api/scorers", json=SCORER_A)
     scorer_id = create_resp.json()["id"]
     response = await client.delete(f"/api/scorers/{scorer_id}")
     assert response.status_code == 204

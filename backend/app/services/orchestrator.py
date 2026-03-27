@@ -29,8 +29,6 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
         yield {"type": "error", "message": "Dataset has no test cases"}; return
 
     judge_config = json.loads(run.judge_config) if isinstance(run.judge_config, str) else run.judge_config
-    scorer_criteria = json.loads(scorer.criteria) if isinstance(scorer.criteria, str) else scorer.criteria
-    score_range = json.loads(scorer.score_range) if isinstance(scorer.score_range, str) else scorer.score_range
     adapter_config = json.loads(adapter_row.config) if isinstance(adapter_row.config, str) else adapter_row.config
 
     bridge = create_adapter(adapter_row.adapter_type)
@@ -71,11 +69,10 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
 
         try:
             judge_messages = assemble_judge_prompt(
-                scorer_eval_prompt=scorer.eval_prompt, scorer_criteria=scorer_criteria,
-                scorer_output_format=scorer.output_format, expected_result=expected,
+                eval_prompt=scorer.eval_prompt, expected_result=expected,
                 agent_messages=agent_result.messages)
             judge_response = await judge_client.chat(judge_messages)
-            parsed = parse_judge_response(judge_response, scorer.output_format, score_range, scorer.pass_threshold)
+            parsed = parse_judge_response(judge_response, scorer.pass_threshold)
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,
                 agent_messages=json.dumps(agent_result.messages), score=json.dumps(parsed["score"]),
                 judge_reasoning=parsed["justification"], passed=parsed["passed"],
@@ -88,7 +85,7 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
 
         db.add(eval_result); await db.commit()
         yield {"type": "case_completed", "case_index": i, "case_name": tc.name,
-               "passed": eval_result.passed, "reasoning": eval_result.judge_reasoning}
+               "passed": eval_result.passed, "justification": eval_result.judge_reasoning}
 
     await bridge.disconnect()
     run.status = RunStatus.completed; run.finished_at = datetime.now(timezone.utc)
