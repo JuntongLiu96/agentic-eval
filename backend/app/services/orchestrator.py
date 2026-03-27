@@ -78,7 +78,7 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
             parsed = parse_judge_response(judge_response, scorer.output_format, score_range, scorer.pass_threshold)
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,
                 agent_messages=json.dumps(agent_result.messages), score=json.dumps(parsed["score"]),
-                judge_reasoning=parsed["reasoning"], passed=parsed["passed"],
+                judge_reasoning=parsed["justification"], passed=parsed["passed"],
                 duration_ms=int((time.monotonic() - start_time) * 1000))
         except Exception as e:
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,

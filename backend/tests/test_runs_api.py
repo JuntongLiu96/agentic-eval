@@ -89,7 +89,7 @@ async def test_start_run_with_mock(client):
         messages=[{"role": "assistant", "content": "4"}], success=True,
     ))
     mock_judge = AsyncMock()
-    mock_judge.chat = AsyncMock(return_value='{"passed": true, "reasoning": "Correct"}')
+    mock_judge.chat = AsyncMock(return_value='{"score": 1, "justification": "The agent correctly answered 4."}')
 
     with patch("app.services.orchestrator.create_adapter", return_value=mock_bridge), \
          patch("app.services.orchestrator.resolve_judge_llm", return_value=mock_judge):

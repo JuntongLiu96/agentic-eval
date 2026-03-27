@@ -14,36 +14,42 @@ def test_assemble_judge_prompt():
     assert len(messages) == 2
     assert messages[0]["role"] == "system"
     assert "Check correctness" in messages[1]["content"]
+    assert "score" in messages[1]["content"]
+    assert "justification" in messages[1]["content"]
 
 def test_parse_binary_pass():
-    r = parse_judge_response('{"passed": true, "reasoning": "OK"}', "binary", {}, None)
+    r = parse_judge_response('{"score": 1, "justification": "The agent answered correctly."}', "binary", {}, None)
     assert r["passed"] is True
+    assert r["justification"] == "The agent answered correctly."
 
 def test_parse_binary_fail():
-    r = parse_judge_response('{"passed": false, "reasoning": "Wrong"}', "binary", {}, None)
+    r = parse_judge_response('{"score": 0, "justification": "The agent gave a wrong answer."}', "binary", {}, None)
     assert r["passed"] is False
 
 def test_parse_numeric_pass():
-    r = parse_judge_response('{"score": 85, "reasoning": "Good"}', "numeric", {"min": 0, "max": 100}, None)
+    r = parse_judge_response('{"score": 85, "justification": "Good response, met most criteria."}', "numeric", {"min": 0, "max": 100}, None)
     assert r["passed"] is True  # 85 >= 60
+    assert "Good response" in r["justification"]
 
 def test_parse_numeric_fail():
-    r = parse_judge_response('{"score": 30, "reasoning": "Poor"}', "numeric", {"min": 0, "max": 100}, None)
+    r = parse_judge_response('{"score": 30, "justification": "Poor quality, missed key requirements."}', "numeric", {"min": 0, "max": 100}, None)
     assert r["passed"] is False
 
 def test_parse_numeric_custom_threshold():
-    r = parse_judge_response('{"score": 75, "reasoning": "OK"}', "numeric", {"min": 0, "max": 100}, 80.0)
+    r = parse_judge_response('{"score": 75, "justification": "Acceptable but below threshold."}', "numeric", {"min": 0, "max": 100}, 80.0)
     assert r["passed"] is False  # 75 < 80
 
 def test_parse_rubric():
     r = parse_judge_response(json.dumps({
-        "dimensions": [{"name": "c", "score": 4, "reasoning": "G"}],
-        "overall_score": 4.5, "reasoning": "VG",
+        "dimensions": [{"name": "correctness", "score": 4, "justification": "Mostly correct"}],
+        "overall_score": 4.5, "score": 4.5,
+        "justification": "Very good overall, strong on correctness.",
     }), "rubric", {"min": 1, "max": 5}, 3.0)
     assert r["passed"] is True
+    assert "Very good" in r["justification"]
 
 def test_parse_code_fences():
-    r = parse_judge_response('```json\n{"passed": true, "reasoning": "OK"}\n```', "binary", {}, None)
+    r = parse_judge_response('```json\n{"score": 1, "justification": "OK"}\n```', "binary", {}, None)
     assert r["passed"] is True
 
 def test_resolve_override():

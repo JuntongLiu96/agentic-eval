@@ -6,7 +6,15 @@ from app.config import settings
 
 SYSTEM_EVAL_PROMPT = """You are an expert evaluation judge. Your job is to evaluate an AI agent's output against expected results using the provided scoring criteria.
 
-You MUST respond with valid JSON matching the requested output format. Do not include any text outside the JSON object.
+You MUST respond with valid JSON in this exact format:
+{
+  "score": <number>,
+  "justification": "<detailed explanation of why you gave this score, referencing the scoring criteria>"
+}
+
+The score must be a numeric value within the range specified by the scoring criteria.
+The justification must explain your reasoning step by step, referencing specific parts of the scoring criteria and the agent's output.
+Do not include any text outside the JSON object.
 """
 
 class DefaultLLMClient:
@@ -45,6 +53,16 @@ def resolve_judge_llm(judge_config: dict[str, Any], adapter_llm: LLMClient | Non
 
 def assemble_judge_prompt(scorer_eval_prompt: str, scorer_criteria: dict[str, Any], scorer_output_format: str,
                           expected_result: Any, agent_messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    # Determine score range description based on format
+    if scorer_output_format == "binary":
+        score_range_desc = "Score range: 0 (fail) or 1 (pass)."
+    elif scorer_output_format == "numeric":
+        score_range_desc = "Score range: use the numeric range defined in the criteria details."
+    elif scorer_output_format == "rubric":
+        score_range_desc = "Score range: use the scale defined in the rubric dimensions. Return an overall_score as well as per-dimension scores."
+    else:
+        score_range_desc = "Score range: 0 to 100."
+
     user_content = f"""## Scoring Criteria
 {scorer_eval_prompt}
 
@@ -57,8 +75,14 @@ def assemble_judge_prompt(scorer_eval_prompt: str, scorer_criteria: dict[str, An
 ## Agent Output (message list)
 {json.dumps(agent_messages, indent=2)}
 
-## Required Output Format: {scorer_output_format}
-Respond with ONLY a valid JSON object matching the {scorer_output_format} format."""
+## Scoring Instructions
+{score_range_desc}
+
+Respond with a JSON object containing:
+- "score": a numeric score value
+- "justification": a detailed explanation of why you assigned this score, referencing specific scoring criteria and specific parts of the agent's output
+
+Respond with ONLY the JSON object, no other text."""
     return [
         {"role": "system", "content": SYSTEM_EVAL_PROMPT},
         {"role": "user", "content": user_content},
@@ -74,22 +98,26 @@ def parse_judge_response(response_text: str, output_format: str, score_range: di
         text = "\n".join(lines)
     data = json.loads(text)
 
+    score_val = data.get("score", 0)
+    justification = data.get("justification", "")
+
     if output_format == "binary":
-        return {"score": data, "passed": data.get("passed", False), "reasoning": data.get("reasoning", "")}
+        # Binary: score is 0 or 1, passed if score >= 1
+        passed = score_val >= 1
+        return {"score": data, "passed": passed, "justification": justification}
     elif output_format == "numeric":
-        score_val = data.get("score", 0)
         threshold = pass_threshold
         if threshold is None:
             smin = score_range.get("min", 0)
             smax = score_range.get("max", 100)
             threshold = smin + (smax - smin) * 0.6
-        return {"score": data, "passed": score_val >= threshold, "reasoning": data.get("reasoning", "")}
+        return {"score": data, "passed": score_val >= threshold, "justification": justification}
     elif output_format == "rubric":
-        overall = data.get("overall_score", 0)
+        overall = data.get("overall_score", score_val)
         threshold = pass_threshold
         if threshold is None:
             smin = score_range.get("min", 1)
             smax = score_range.get("max", 5)
             threshold = smin + (smax - smin) * 0.6
-        return {"score": data, "passed": overall >= threshold, "reasoning": data.get("reasoning", "")}
-    return {"score": data, "passed": False, "reasoning": "Unknown format"}
+        return {"score": data, "passed": overall >= threshold, "justification": justification}
+    return {"score": data, "passed": False, "justification": "Unknown format"}

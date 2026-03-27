@@ -140,7 +140,7 @@ This endpoint forwards chat messages **directly to your agent's LLM** — no age
 **Response body:**
 ```json
 {
-  "content": "{\"passed\": true, \"reasoning\": \"The agent correctly booked the flight.\"}"
+  "content": "{\"score\": 1, \"justification\": \"The agent correctly identified the flight, called the booking tool with the right parameters, and confirmed the booking to the user.\"}"
 }
 ```
 
@@ -240,14 +240,14 @@ Example request:
 {
   "messages": [
     {"role": "system", "content": "You are an expert evaluation judge..."},
-    {"role": "user", "content": "## Scoring Criteria\nDid the agent answer correctly?\n\n## Expected Result\n{\"answer\": \"55°F and cloudy\"}\n\n## Agent Output\n[{\"role\": \"assistant\", \"content\": \"It's 55°F and cloudy.\"}]\n\n## Required Output Format: binary\nRespond with ONLY a valid JSON object."}
+    {"role": "user", "content": "## Scoring Criteria\nDid the agent answer correctly?\n\n## Expected Result\n{\"answer\": \"55°F and cloudy\"}\n\n## Agent Output\n[{\"role\": \"assistant\", \"content\": \"It's 55°F and cloudy.\"}]\n\n## Scoring Instructions\nScore range: 0 (fail) or 1 (pass).\n\nRespond with a JSON object containing:\n- \"score\": a numeric score value\n- \"justification\": a detailed explanation of why you assigned this score"}
   ]
 }
 ```
 
 Example response:
 ```json
-{"content": "{\"passed\": true, \"reasoning\": \"The agent correctly reported the weather.\"}"}
+{"content": "{\"score\": 1, \"justification\": \"The agent correctly reported the weather as 55°F and cloudy, matching the expected result exactly.\"}"}
 ```
 
 ## Important distinctions
@@ -427,9 +427,9 @@ Scorers define how the judge LLM evaluates your agent's output. Three output for
 
 | Format | What the judge returns | Pass logic |
 |--------|----------------------|------------|
-| **binary** | `{"passed": true/false, "reasoning": "..."}` | Direct pass/fail |
-| **numeric** | `{"score": 85, "reasoning": "..."}` | Pass if score ≥ threshold (default 60%) |
-| **rubric** | `{"dimensions": [...], "overall_score": 3.5}` | Pass if overall score ≥ threshold |
+| **binary** | `{"score": 0 or 1, "justification": "..."}` | Pass if score >= 1 |
+| **numeric** | `{"score": 85, "justification": "..."}` | Pass if score ≥ threshold (default 60%) |
+| **rubric** | `{"score": 4.5, "overall_score": 4.5, "justification": "..."}` | Pass if overall_score ≥ threshold |
 
 ### Via CLI
 
