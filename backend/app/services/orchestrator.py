@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
@@ -12,6 +13,8 @@ from app.models.eval_run import EvalRun, RunStatus
 from app.models.scorer import Scorer
 from app.services.aggregator import aggregate_run_results
 from app.services.judge import assemble_judge_prompt, parse_judge_response, resolve_judge_llm
+
+logger = logging.getLogger(__name__)
 
 async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, Any], None]:
     run = await db.get(EvalRun, run_id)
@@ -48,9 +51,11 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
     run.status = RunStatus.running
     run.started_at = datetime.now(timezone.utc)
     await db.commit()
+    logger.info(f"Run #{run_id} started with {len(test_cases)} test cases")
     yield {"type": "run_started", "run_id": run_id, "total_cases": len(test_cases)}
 
     for i, tc in enumerate(test_cases):
+        logger.info(f"Run #{run_id} case {i+1}/{len(test_cases)}: {tc.name}")
         yield {"type": "case_started", "case_index": i, "case_name": tc.name, "total_cases": len(test_cases)}
         start_time = time.monotonic()
         test_data = json.loads(tc.data) if isinstance(tc.data, str) else tc.data
@@ -59,6 +64,7 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
         agent_result = await bridge.send_test(test_data)
 
         if not agent_result.success:
+            logger.warning(f"Run #{run_id} case {tc.name}: agent failed — {agent_result.error}")
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,
                 agent_messages=json.dumps(agent_result.messages), score=json.dumps({}),
                 judge_reasoning=f"Agent error: {agent_result.error}", passed=False,
@@ -68,16 +74,19 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
             continue
 
         try:
+            logger.info(f"Run #{run_id} case {tc.name}: agent returned {len(agent_result.messages)} messages, calling judge...")
             judge_messages = assemble_judge_prompt(
                 eval_prompt=scorer.eval_prompt, expected_result=expected,
                 agent_messages=agent_result.messages)
             judge_response = await judge_client.chat(judge_messages)
             parsed = parse_judge_response(judge_response, scorer.pass_threshold)
+            logger.info(f"Run #{run_id} case {tc.name}: score={parsed['score']}, passed={parsed['passed']}")
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,
                 agent_messages=json.dumps(agent_result.messages), score=json.dumps(parsed["score"]),
                 judge_reasoning=parsed["justification"], passed=parsed["passed"],
                 duration_ms=int((time.monotonic() - start_time) * 1000))
         except Exception as e:
+            logger.error(f"Run #{run_id} case {tc.name}: judge error — {e}")
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,
                 agent_messages=json.dumps(agent_result.messages), score=json.dumps({}),
                 judge_reasoning=f"Judge error: {e}", passed=False,
