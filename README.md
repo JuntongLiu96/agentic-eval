@@ -89,30 +89,45 @@ Best for agents with a backend server (C#, Python, Go, Node.js, etc.).
 
 ```
 GET  /eval/health        → 200 OK (any response body)
-POST /eval/run           → accepts JSON test data, returns agent output
-POST /eval/judge         → accepts chat messages, returns LLM response (uses your agent's LLM)
+POST /eval/run           → run full agent e2e flow, treat input as user message
+POST /eval/judge         → forward messages directly to LLM (no agent flow)
 ```
 
-**`POST /eval/run` request body:**
+#### `POST /eval/run` — Run Agent Flow
+
+This endpoint receives a user prompt and runs your agent's **complete end-to-end workflow** — exactly as if a real user sent that message. The agent should use its own system prompt, tools, memory, and any other internal logic. Return the full conversation message list.
+
+**Request body:**
 ```json
 {
-  "prompt": "What is 2+2?",
-  "context": "math test"
+  "prompt": "Book a flight from Seattle to Tokyo for next Friday",
+  "metadata": {}
 }
 ```
-*(The structure matches whatever you put in your test case's `data` field.)*
 
-**`POST /eval/run` response body:**
+- `prompt` — treat this as a normal user input message to your agent
+- `metadata` — reserved for future use (pass-through context)
+
+**Response body:**
 ```json
 {
   "messages": [
-    {"role": "assistant", "content": "The answer is 4."}
+    {"role": "user", "content": "Book a flight from Seattle to Tokyo for next Friday"},
+    {"role": "assistant", "content": "I'll search for flights from Seattle to Tokyo..."},
+    {"role": "tool", "content": "{\"flights\": [{\"airline\": \"ANA\", \"price\": 850}]}"},
+    {"role": "assistant", "content": "I found a flight on ANA for $850. Would you like to book it?"}
   ],
   "metadata": {}
 }
 ```
 
-**`POST /eval/judge` request body:**
+Return the **full message list** including all intermediate steps (tool calls, reasoning, etc.) — this is what the judge LLM will evaluate.
+
+#### `POST /eval/judge` — Direct LLM Call
+
+This endpoint forwards chat messages **directly to your agent's LLM** — no agent system prompt, no e2e flow, no tools. Just a raw LLM completion call using the same model and API key your agent uses internally.
+
+**Request body:**
 ```json
 {
   "messages": [
@@ -122,16 +137,16 @@ POST /eval/judge         → accepts chat messages, returns LLM response (uses y
 }
 ```
 
-**`POST /eval/judge` response body:**
+**Response body:**
 ```json
 {
-  "content": "{\"passed\": true, \"reasoning\": \"The agent correctly answered 4.\"}"
+  "content": "{\"passed\": true, \"reasoning\": \"The agent correctly booked the flight.\"}"
 }
 ```
 
-This endpoint lets AgenticEval use your agent's own LLM for judging. Your implementation should forward the messages to whatever LLM your agent uses internally and return the response. This way, the eval uses the same model, API key, and configuration as your agent.
+> **Important:** Do NOT inject your agent's system prompt here. The eval system provides its own judge system prompt. Just forward the messages to the LLM and return the raw response.
 
-**Register the adapter in AgenticEval:**
+#### Register the adapter
 
 ```bash
 agenticeval adapters create \
@@ -154,6 +169,109 @@ The full config object supports custom endpoint paths:
 }
 ```
 
+#### Integration Prompt for Your Coding Agent
+
+Copy the prompt below and paste it into your coding agent (Claude, Copilot, GitHub Copilot Workspace, etc.) to generate the three eval endpoints for your project:
+
+<details>
+<summary><strong>Click to expand the full integration prompt</strong></summary>
+
+````
+I need to add three HTTP endpoints to my project for integration with AgenticEval,
+an external evaluation system that tests my AI agent. These endpoints let AgenticEval
+send test inputs to my agent and use my agent's LLM for scoring.
+
+## What to implement
+
+Add these three endpoints to my existing server:
+
+### 1. GET /eval/health
+Simple health check. Return 200 OK if the agent is ready.
+
+### 2. POST /eval/run
+This is the core eval endpoint. It should:
+1. Accept a JSON body: {"prompt": "...", "metadata": {}}
+2. Treat the "prompt" as a REAL user message — as if a user typed it
+3. Run my agent's COMPLETE standard workflow:
+   - Use the agent's normal system prompt
+   - Execute the full agent loop (tool calls, reasoning, memory, etc.)
+   - Do NOT skip any steps — this must behave identically to a real user interaction
+4. Collect ALL messages from the conversation into a list
+5. Return: {"messages": [...], "metadata": {}}
+
+The messages array should include the full conversation history in order:
+- {"role": "user", "content": "the prompt"}
+- {"role": "assistant", "content": "agent's response"}
+- {"role": "tool", "content": "tool results"} (if applicable)
+- ... any additional turns
+
+Example request:
+```json
+{"prompt": "What is the weather in Seattle?", "metadata": {}}
+```
+
+Example response:
+```json
+{
+  "messages": [
+    {"role": "user", "content": "What is the weather in Seattle?"},
+    {"role": "assistant", "content": "Let me check the weather for you."},
+    {"role": "tool", "content": "{\"temp\": 55, \"condition\": \"cloudy\"}"},
+    {"role": "assistant", "content": "It's currently 55°F and cloudy in Seattle."}
+  ],
+  "metadata": {}
+}
+```
+
+### 3. POST /eval/judge
+This endpoint is for LLM-based scoring. It should:
+1. Accept a JSON body: {"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]}
+2. Forward these messages DIRECTLY to my agent's LLM (same model, same API key)
+3. Do NOT add my agent's system prompt — the eval system provides its own judge prompt
+4. Do NOT run the agent loop, tools, or any agent logic
+5. Just call the LLM's chat completion API and return the raw text response
+6. Return: {"content": "...the LLM response text..."}
+
+This is essentially a thin proxy to my LLM. The eval system uses it to judge
+the agent's output using the same model the agent uses internally.
+
+Example request:
+```json
+{
+  "messages": [
+    {"role": "system", "content": "You are an expert evaluation judge..."},
+    {"role": "user", "content": "## Scoring Criteria\nDid the agent answer correctly?\n\n## Expected Result\n{\"answer\": \"55°F and cloudy\"}\n\n## Agent Output\n[{\"role\": \"assistant\", \"content\": \"It's 55°F and cloudy.\"}]\n\n## Required Output Format: binary\nRespond with ONLY a valid JSON object."}
+  ]
+}
+```
+
+Example response:
+```json
+{"content": "{\"passed\": true, \"reasoning\": \"The agent correctly reported the weather.\"}"}
+```
+
+## Important distinctions
+
+| Aspect | /eval/run | /eval/judge |
+|--------|-----------|-------------|
+| Purpose | Test the agent's real behavior | Score the agent's output |
+| System prompt | USE agent's own system prompt | Do NOT add agent's system prompt |
+| Agent loop | YES — full e2e agent workflow | NO — just a raw LLM call |
+| Tools | YES — agent uses its tools normally | NO — no tools, no agent logic |
+| Input | User prompt string | Chat messages array |
+| Output | Full message list from agent run | Raw LLM response text |
+
+## Requirements
+- These endpoints should be added alongside the existing server routes
+- They should reuse the existing agent infrastructure (same LLM client, same tools, same config)
+- The /eval/run endpoint must produce identical behavior to a real user interaction
+- The /eval/judge endpoint must be a minimal LLM proxy with no agent logic
+- Error handling: return appropriate HTTP error codes (500 for internal errors, 400 for bad input)
+- The endpoints should be under the /eval path prefix to avoid conflicts with existing routes
+````
+
+</details>
+
 ---
 
 ### Option B: Stdio Adapter (for desktop/Electron apps and CLI tools)
@@ -170,10 +288,16 @@ Health check:
 ← stdout: {"type": "health_ok"}\n
 ```
 
-Run a test:
+Run a test (starts full agent e2e flow):
 ```
 → stdin:  {"type": "run_test", "id": "abc-123", "data": {"prompt": "What is 2+2?"}}\n
-← stdout: {"messages": [{"role": "assistant", "content": "4"}], "metadata": {}}\n
+← stdout: {"messages": [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": "4"}], "metadata": {}}\n
+```
+
+Judge (direct LLM call — no agent system prompt, no e2e flow):
+```
+→ stdin:  {"type": "judge", "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]}\n
+← stdout: {"type": "judge_result", "content": "...the LLM response..."}\n
 ```
 
 Error:
@@ -181,11 +305,7 @@ Error:
 ← stdout: {"type": "error", "message": "something went wrong"}\n
 ```
 
-Judge (for eval — forward to your agent's LLM):
-```
-→ stdin:  {"type": "judge", "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]}\n
-← stdout: {"type": "judge_result", "content": "...the LLM response..."}\n
-```
+For `run_test`: treat `data.prompt` as a normal user message, run your agent's full workflow, and return all messages. For `judge`: forward messages directly to your LLM without adding agent system prompts.
 
 **Register the adapter:**
 
@@ -240,16 +360,23 @@ class MyAgentBridge:
         return True
 
     async def send_test(self, test_data: dict) -> AgentResult:
-        """Required: run a test and return the agent's output."""
-        # Call your agent here
-        result = await my_agent.run(test_data["prompt"])
-        return AgentResult(
-            messages=[{"role": "assistant", "content": result}]
-        )
+        """Required: run full agent e2e flow, treat prompt as real user input."""
+        prompt = test_data["prompt"]
+        # Run your agent's complete workflow — same as a real user interaction
+        messages = await my_agent.run_full_flow(user_message=prompt)
+        return AgentResult(messages=messages)
 
     async def get_judge_llm(self):
-        """Optional: return an LLM client for judging (uses your agent's LLM)."""
-        return None
+        """Optional: return an LLM client for judging (direct LLM call, no agent flow)."""
+        return MyLLMClient()  # thin wrapper around your LLM API
+
+
+class MyLLMClient:
+    """Implements the LLMClient protocol — just calls your LLM directly."""
+    async def chat(self, messages: list[dict[str, str]]) -> str:
+        # Forward messages to your LLM — NO agent system prompt, NO tools
+        response = await my_llm.chat_completion(messages=messages)
+        return response.content
 ```
 
 **Register the adapter:**
@@ -284,11 +411,11 @@ agenticeval datasets export-csv 1 --output exported.csv
 
 ```csv
 name,data,expected_result,metadata
-"addition","{"prompt": "What is 2+2?"}","{"answer": "4"}","{}"
-"subtraction","{"prompt": "What is 10-3?"}","{"answer": "7"}","{}"
+"book-flight","{""prompt"": ""Book a flight from Seattle to Tokyo for next Friday""}","{""booked"": true, ""destination"": ""Tokyo""}","{}"
+"weather-check","{""prompt"": ""What is the weather in Seattle?""}","{""answer"": ""55°F and cloudy""}","{}"
 ```
 
-The `data`, `expected_result`, and `metadata` columns contain JSON-encoded strings.
+The `data` column should contain a JSON object with a `prompt` field — this is what gets sent to your agent as user input. The `expected_result` column defines what the judge LLM compares against. Both columns contain JSON-encoded strings.
 
 ### Via Web Dashboard
 
