@@ -307,7 +307,7 @@ Example response:
 
 Best for agents that run as a local process (Electron apps, CLI tools, etc.).
 
-**What you need to implement:** A process that reads JSON from stdin and writes JSON to stdout (one JSON object per line).
+**What you need to implement:** A process that reads JSON from stdin and writes JSON to stdout (one JSON object per line). The process handles three message types: health check, run test (full e2e agent flow), and judge (direct LLM call).
 
 **Protocol (newline-delimited JSON):**
 
@@ -317,24 +317,29 @@ Health check:
 ← stdout: {"type": "health_ok"}\n
 ```
 
-Run a test (starts full agent e2e flow):
+Run a test — starts the agent's **complete e2e workflow**, treating the prompt as a real user message:
 ```
 → stdin:  {"type": "run_test", "id": "abc-123", "data": {"prompt": "What is 2+2?"}}\n
-← stdout: {"messages": [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": "4"}], "metadata": {}}\n
+← stdout: {"messages": [...], "sub_agent_messages": [...], "metadata": {}}\n
 ```
 
-Judge (direct LLM call — no agent system prompt, no e2e flow):
+- `messages` — **(required)** main agent's full conversation history
+- `sub_agent_messages` — **(optional)** message lists from sub-agents that ran during the workflow
+- Use the agent's own system prompt, tools, and full agent loop — identical to a real user interaction
+
+Judge — forwards messages **directly to the LLM**, no agent system prompt, no e2e flow:
 ```
 → stdin:  {"type": "judge", "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]}\n
 ← stdout: {"type": "judge_result", "content": "...the LLM response..."}\n
 ```
 
+- Do NOT add the agent's system prompt — the eval system provides its own judge prompt
+- Do NOT run the agent loop, tools, or any agent logic — just call the LLM and return the raw response
+
 Error:
 ```
 ← stdout: {"type": "error", "message": "something went wrong"}\n
 ```
-
-For `run_test`: treat `data.prompt` as a normal user message, run your agent's full workflow, and return all messages. For `judge`: forward messages directly to your LLM without adding agent system prompts.
 
 **Register the adapter:**
 
@@ -351,9 +356,14 @@ Config options:
   "command": "python",
   "args": ["my_agent.py"],
   "cwd": "/path/to/agent",
-  "timeout_seconds": 300
+  "timeout_seconds": 3600
 }
 ```
+
+- `command` — **(required)** executable to run
+- `args` — **(optional)** command-line arguments
+- `cwd` — **(optional)** working directory
+- `timeout_seconds` — **(optional)** max seconds to wait for a response (default: 3600)
 
 ---
 
@@ -361,7 +371,7 @@ Config options:
 
 Best for Python agents (LangChain, custom agents, etc.) where you want zero network overhead.
 
-**What you need to implement:** A Python class with an async `send_test` method.
+**What you need to implement:** A Python class with an async `send_test` method (full e2e flow) and optionally `get_judge_llm` (direct LLM access for judging).
 
 ```python
 # my_agents/eval_bridge.py
@@ -370,7 +380,8 @@ from typing import Any
 
 @dataclass
 class AgentResult:
-    messages: list[dict[str, Any]]
+    messages: list[dict[str, Any]]          # main agent conversation
+    sub_agent_messages: list[dict[str, Any]] = field(default_factory=list)  # sub-agent conversations
     metadata: dict[str, Any] = field(default_factory=dict)
     success: bool = True
     error: str | None = None
@@ -389,21 +400,37 @@ class MyAgentBridge:
         return True
 
     async def send_test(self, test_data: dict) -> AgentResult:
-        """Required: run full agent e2e flow, treat prompt as real user input."""
+        """Required: run full agent e2e flow, treat prompt as real user input.
+
+        This must behave identically to a real user interaction:
+        - Use the agent's own system prompt
+        - Execute the full agent loop (tool calls, reasoning, memory, etc.)
+        - Do NOT skip any steps
+        """
         prompt = test_data["prompt"]
         # Run your agent's complete workflow — same as a real user interaction
-        messages = await my_agent.run_full_flow(user_message=prompt)
-        return AgentResult(messages=messages)
+        result = await my_agent.run_full_flow(user_message=prompt)
+        return AgentResult(
+            messages=result.main_messages,
+            sub_agent_messages=result.sub_agent_messages,  # optional
+        )
 
     async def get_judge_llm(self):
-        """Optional: return an LLM client for judging (direct LLM call, no agent flow)."""
-        return MyLLMClient()  # thin wrapper around your LLM API
+        """Optional: return an LLM client for judging.
+
+        This is used for DIRECT LLM calls — no agent system prompt, no tools.
+        The eval system sends its own judge prompt and expects a raw LLM response.
+        """
+        return MyLLMClient()
 
 
 class MyLLMClient:
-    """Implements the LLMClient protocol — just calls your LLM directly."""
+    """Implements the LLMClient protocol — just calls your LLM directly.
+
+    Do NOT add agent system prompts. Do NOT run agent logic.
+    Just forward messages to the LLM and return the response.
+    """
     async def chat(self, messages: list[dict[str, str]]) -> str:
-        # Forward messages to your LLM — NO agent system prompt, NO tools
         response = await my_llm.chat_completion(messages=messages)
         return response.content
 ```
