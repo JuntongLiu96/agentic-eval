@@ -365,6 +365,80 @@ Config options:
 - `cwd` — **(optional)** working directory
 - `timeout_seconds` — **(optional)** max seconds to wait for a response (default: 3600)
 
+#### Integration Prompt for Your Coding Agent
+
+Copy the prompt below and paste it into your coding agent to generate the stdio eval handler for your project:
+
+<details>
+<summary><strong>Click to expand the Stdio integration prompt</strong></summary>
+
+````
+I need to add a stdin/stdout JSON Lines protocol handler to my project for integration
+with AgenticEval, an external evaluation system that tests my AI agent.
+
+My agent process should read JSON messages from stdin (one per line) and write
+JSON responses to stdout (one per line).
+
+## Message types to handle
+
+### 1. Health check
+Request:  {"type": "health_check"}
+Response: {"type": "health_ok"}
+
+Just return health_ok if the agent is ready.
+
+### 2. Run test (full e2e agent flow)
+Request:  {"type": "run_test", "id": "<uuid>", "data": {"prompt": "...", "metadata": {}}}
+Response: {"messages": [...], "sub_agent_messages": [...], "metadata": {}}
+
+This must:
+1. Treat data.prompt as a REAL user message — as if a user typed it
+2. Run my agent's COMPLETE standard workflow:
+   - Use the agent's normal system prompt
+   - Execute the full agent loop (tool calls, reasoning, memory, etc.)
+   - Do NOT skip any steps — identical to a real user interaction
+3. Collect ALL messages from the main agent conversation
+4. If the agent delegates to sub-agents, collect their message lists in sub_agent_messages (optional)
+5. Return the messages and sub_agent_messages as JSON
+
+The messages array should include the full conversation history:
+- {"role": "user", "content": "the prompt"}
+- {"role": "assistant", "content": "agent's response"}
+- {"role": "tool", "content": "tool results"} (if applicable)
+
+### 3. Judge (direct LLM call)
+Request:  {"type": "judge", "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]}
+Response: {"type": "judge_result", "content": "...the LLM response text..."}
+
+This must:
+1. Forward the messages DIRECTLY to my agent's LLM (same model, same API key)
+2. Do NOT add my agent's system prompt — the eval system provides its own
+3. Do NOT run the agent loop, tools, or any agent logic
+4. Just call the LLM's chat completion and return the raw text
+
+### 4. Error
+If anything fails, return: {"type": "error", "message": "description of what went wrong"}
+
+## Important distinctions
+
+| Aspect | run_test | judge |
+|--------|----------|-------|
+| Purpose | Test the agent's real behavior | Score the agent's output |
+| System prompt | USE agent's own system prompt | Do NOT add agent's system prompt |
+| Agent loop | YES — full e2e workflow | NO — just a raw LLM call |
+| Tools | YES — agent uses tools normally | NO — no tools, no agent logic |
+| Input | data.prompt (user message string) | messages array (chat messages) |
+| Output | Full message list + sub-agent messages | Raw LLM response text |
+
+## Requirements
+- Read from stdin, write to stdout, one JSON object per line (newline-delimited)
+- The process should stay alive between messages (long-running)
+- Stderr can be used for logging (not parsed as protocol messages)
+- Reuse the existing agent infrastructure (same LLM client, same tools, same config)
+````
+
+</details>
+
 ---
 
 ### Option C: Python Adapter (for in-process Python agents)
@@ -445,6 +519,102 @@ agenticeval adapters create \
 ```
 
 > **Note:** The module must be importable from the backend's working directory. Add your agent's path to `PYTHONPATH` if needed.
+
+#### Integration Prompt for Your Coding Agent
+
+Copy the prompt below and paste it into your coding agent to generate the Python eval bridge class for your project:
+
+<details>
+<summary><strong>Click to expand the Python integration prompt</strong></summary>
+
+````
+I need to create a Python eval bridge class for integration with AgenticEval,
+an external evaluation system that tests my AI agent. AgenticEval will import
+this class and call it directly (in-process, no HTTP).
+
+## What to implement
+
+Create a bridge class with these methods:
+
+### 1. send_test(test_data: dict) -> AgentResult (REQUIRED)
+This is the core eval method. It should:
+1. Read test_data["prompt"] as a user message
+2. Run my agent's COMPLETE standard workflow:
+   - Use the agent's normal system prompt
+   - Execute the full agent loop (tool calls, reasoning, memory, etc.)
+   - Do NOT skip any steps — identical to a real user interaction
+3. Collect ALL messages from the main agent conversation
+4. If the agent delegates to sub-agents, collect their message lists too
+5. Return an AgentResult with messages, sub_agent_messages, and success status
+
+### 2. get_judge_llm() -> LLMClient (OPTIONAL but recommended)
+Return an object with an async chat(messages) -> str method that:
+1. Forwards messages DIRECTLY to my agent's LLM (same model, same API key)
+2. Does NOT add my agent's system prompt — AgenticEval provides its own
+3. Does NOT run the agent loop, tools, or any agent logic
+4. Just calls the LLM's chat completion and returns the raw text
+
+### 3. connect(config: dict), disconnect(), health_check() -> bool (OPTIONAL)
+Lifecycle methods for setup/teardown.
+
+## The class structure
+
+```python
+from dataclasses import dataclass, field
+from typing import Any
+
+@dataclass
+class AgentResult:
+    messages: list[dict[str, Any]]          # main agent conversation
+    sub_agent_messages: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    success: bool = True
+    error: str | None = None
+
+class MyEvalBridge:
+    async def connect(self, config: dict) -> None:
+        # Initialize your agent here
+        pass
+
+    async def disconnect(self) -> None:
+        # Cleanup
+        pass
+
+    async def health_check(self) -> bool:
+        return True
+
+    async def send_test(self, test_data: dict) -> AgentResult:
+        prompt = test_data["prompt"]
+        # TODO: Run your agent's full e2e flow with this prompt
+        # Return AgentResult with all messages
+        pass
+
+    async def get_judge_llm(self):
+        # TODO: Return an LLMClient that calls your LLM directly
+        # (no agent system prompt, no tools — just raw LLM call)
+        pass
+```
+
+## Important distinctions
+
+| Aspect | send_test | get_judge_llm().chat() |
+|--------|-----------|----------------------|
+| Purpose | Test the agent's real behavior | Score the agent's output |
+| System prompt | USE agent's own system prompt | Do NOT add agent's system prompt |
+| Agent loop | YES — full e2e workflow | NO — just a raw LLM call |
+| Tools | YES — agent uses tools normally | NO — no tools, no agent logic |
+| Input | test_data["prompt"] (user message) | messages array (chat messages) |
+| Output | AgentResult with full message list | Raw LLM response string |
+
+## Requirements
+- The class must be importable as a Python module (e.g., my_agents.eval_bridge.MyEvalBridge)
+- All methods must be async
+- send_test must produce identical behavior to a real user interaction
+- get_judge_llm must return a minimal LLM proxy with no agent logic
+- Reuse the existing agent infrastructure (same LLM client, same tools, same config)
+````
+
+</details>
 
 ---
 
