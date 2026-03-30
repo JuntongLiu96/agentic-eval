@@ -81,9 +81,11 @@ The judge LLM uses the OpenAI-compatible `/chat/completions` endpoint, so it wor
 
 AgenticEval connects to your agent through one of three bridge adapters. Choose the one that fits your agent's architecture.
 
-### Option A: HTTP Adapter (recommended for service-type agents)
+### Option A: HTTP Adapter (recommended for most agents)
 
-Best for agents with a backend server (C#, Python, Go, Node.js, etc.).
+Best for agents with a backend server (C#, Python, Go, Node.js, etc.) **and** desktop/Electron apps running in eval mode.
+
+**How it works:** Your agent exposes three HTTP endpoints. You start your agent yourself, then point AgenticEval at it. This works for any agent that can serve HTTP — backend services, Electron apps with a local eval server, CLI tools with an embedded HTTP server, etc.
 
 **What you need to implement:** Three HTTP endpoints in your agent's server.
 
@@ -155,6 +157,22 @@ This endpoint forwards chat messages **directly to your agent's LLM** — no age
 ```
 
 > **Important:** Do NOT inject your agent's system prompt here. The eval system provides its own judge system prompt. Just forward the messages to the LLM and return the raw response.
+
+#### For Electron / Desktop Apps
+
+Electron and desktop apps work great with the HTTP adapter. Add a small eval HTTP server that starts when your app launches in eval mode:
+
+1. Add eval mode to your app: `npx electron . --eval-mode --eval-port 9200`
+2. In eval mode, start a local HTTP server (e.g., Express) on the specified port exposing `/eval/health`, `/eval/run`, `/eval/judge`
+3. The `/eval/run` handler triggers your app's agent flow programmatically and returns the message list
+4. Start your app first, then configure the AgenticEval adapter:
+
+```bash
+agenticeval adapters create --name "my-electron-app" --type http \
+  --config '{"base_url": "http://localhost:9200"}'
+```
+
+This is better than the Stdio adapter for desktop apps because: the app initializes fully before eval starts, no stdout pollution from GUI logs, and you control the app lifecycle.
 
 #### Register the adapter
 
@@ -303,9 +321,11 @@ Example response:
 
 ---
 
-### Option B: Stdio Adapter (for desktop/Electron apps and CLI tools)
+### Option B: Stdio Adapter (for headless CLI tools)
 
-Best for agents that run as a local process (Electron apps, CLI tools, etc.).
+Best for **headless command-line agents** that have no GUI and can communicate purely via stdin/stdout. AgenticEval spawns the process and manages its lifecycle.
+
+> **Not recommended for Electron/desktop apps** — use Option A (HTTP adapter) instead. Desktop apps have GUI initialization, stdout noise from Chromium/GPU logs, and lifecycle complexities that make stdio unreliable. See the "For Electron / Desktop Apps" section under Option A.
 
 **What you need to implement:** A process that reads JSON from stdin and writes JSON to stdout (one JSON object per line). The process handles three message types: health check, run test (full e2e agent flow), and judge (direct LLM call).
 

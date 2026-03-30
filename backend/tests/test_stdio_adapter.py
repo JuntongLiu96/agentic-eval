@@ -18,7 +18,7 @@ async def test_stdio_adapter_connect():
 async def test_stdio_adapter_default_timeout():
     adapter = StdioAdapter()
     await adapter.connect({"command": "python", "args": []})
-    assert adapter.timeout_seconds == 300
+    assert adapter.timeout_seconds == 3600
 
 @pytest.mark.asyncio
 async def test_stdio_adapter_get_judge_llm():

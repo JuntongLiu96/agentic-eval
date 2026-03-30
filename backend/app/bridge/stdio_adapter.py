@@ -1,8 +1,11 @@
 import asyncio
 import json
+import logging
 import uuid
 from typing import Any
 from app.bridge.base import AgentResult, BridgeAdapter, LLMClient
+
+logger = logging.getLogger(__name__)
 
 
 class StdioJudgeLLMClient:
@@ -16,15 +19,12 @@ class StdioJudgeLLMClient:
         msg = json.dumps({"type": "judge", "messages": messages}) + "\n"
         process.stdin.write(msg.encode())
         await process.stdin.drain()
-        line = await asyncio.wait_for(
-            process.stdout.readline(), timeout=self._adapter.timeout_seconds
-        )
-        if not line:
+        line = await self._adapter._read_json_line(self._adapter.timeout_seconds)
+        if line is None:
             raise RuntimeError("Subprocess closed stdout during judge call")
-        data = json.loads(line.decode().strip())
-        if data.get("type") == "error":
-            raise RuntimeError(data.get("message", "Judge call failed"))
-        return data.get("content", "")
+        if line.get("type") == "error":
+            raise RuntimeError(line.get("message", "Judge call failed"))
+        return line.get("content", "")
 
 
 class StdioAdapter(BridgeAdapter):
@@ -32,7 +32,8 @@ class StdioAdapter(BridgeAdapter):
         self.command: str = ""
         self.args: list[str] = []
         self.cwd: str | None = None
-        self.timeout_seconds: int = 300
+        self.timeout_seconds: int = 3600
+        self.startup_timeout: int = 30
         self._process: asyncio.subprocess.Process | None = None
         self._description: str = ""
 
@@ -40,20 +41,64 @@ class StdioAdapter(BridgeAdapter):
         self.command = config["command"]
         self.args = config.get("args", [])
         self.cwd = config.get("cwd")
-        self.timeout_seconds = config.get("timeout_seconds", 300)
+        self.timeout_seconds = config.get("timeout_seconds", 3600)
+        self.startup_timeout = config.get("startup_timeout", 30)
         self._description = config.get("description", f"Stdio agent: {self.command}")
+        logger.info(f"StdioAdapter configured: {self.command} {' '.join(self.args)} (cwd={self.cwd}, timeout={self.timeout_seconds}s)")
 
     async def _ensure_process(self) -> asyncio.subprocess.Process:
         if self._process is None or self._process.returncode is not None:
+            logger.info(f"Starting subprocess: {self.command} {' '.join(self.args)}")
             self._process = await asyncio.create_subprocess_exec(
                 self.command, *self.args,
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE, cwd=self.cwd,
             )
+            # Start a background task to drain stderr (log it, don't let it block)
+            asyncio.create_task(self._drain_stderr())
+            logger.info(f"Subprocess started (pid={self._process.pid})")
         return self._process
+
+    async def _drain_stderr(self) -> None:
+        """Read stderr in background and log it. Prevents pipe buffer from filling."""
+        if not self._process or not self._process.stderr:
+            return
+        try:
+            while True:
+                line = await self._process.stderr.readline()
+                if not line:
+                    break
+                text = line.decode().strip()
+                if text:
+                    logger.debug(f"[subprocess stderr] {text}")
+        except Exception:
+            pass
+
+    async def _read_json_line(self, timeout: float) -> dict | None:
+        """Read one valid JSON line from stdout, skipping non-JSON lines (e.g. Electron logs)."""
+        if not self._process or not self._process.stdout:
+            return None
+        deadline = asyncio.get_event_loop().time() + timeout
+        while True:
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError()
+            line = await asyncio.wait_for(self._process.stdout.readline(), timeout=remaining)
+            if not line:
+                return None
+            text = line.decode().strip()
+            if not text:
+                continue
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # Skip non-JSON output (Electron GPU logs, DevTools messages, etc.)
+                logger.debug(f"[subprocess stdout, skipping non-JSON] {text[:200]}")
+                continue
 
     async def disconnect(self) -> None:
         if self._process and self._process.returncode is None:
+            logger.info(f"Terminating subprocess (pid={self._process.pid})")
             self._process.terminate()
             try: await asyncio.wait_for(self._process.wait(), timeout=5)
             except asyncio.TimeoutError: self._process.kill()
@@ -65,11 +110,12 @@ class StdioAdapter(BridgeAdapter):
             msg = json.dumps({"type": "health_check"}) + "\n"
             process.stdin.write(msg.encode())
             await process.stdin.drain()
-            line = await asyncio.wait_for(process.stdout.readline(), timeout=10)
-            if not line: return False
-            data = json.loads(line.decode().strip())
+            data = await self._read_json_line(self.startup_timeout)
+            if data is None:
+                return False
             return data.get("type") == "health_ok"
-        except (asyncio.TimeoutError, json.JSONDecodeError, OSError):
+        except (asyncio.TimeoutError, OSError) as e:
+            logger.warning(f"Health check failed: {e}")
             return False
 
     async def send_test(self, test_data: dict[str, Any]) -> AgentResult:
@@ -77,14 +123,19 @@ class StdioAdapter(BridgeAdapter):
             process = await self._ensure_process()
             request_id = str(uuid.uuid4())
             msg = json.dumps({"type": "run_test", "id": request_id, "data": test_data}) + "\n"
+            logger.info(f"Sending test to subprocess (id={request_id[:8]})")
             process.stdin.write(msg.encode())
             await process.stdin.drain()
-            line = await asyncio.wait_for(process.stdout.readline(), timeout=self.timeout_seconds)
-            if not line:
+            data = await self._read_json_line(self.timeout_seconds)
+            if data is None:
                 return AgentResult(messages=[], success=False, error="Subprocess closed stdout")
-            data = json.loads(line.decode().strip())
             if data.get("type") == "error":
-                return AgentResult(messages=[], success=False, error=data.get("message", "Unknown error"))
+                error_msg = data.get("message", "Unknown error")
+                logger.error(f"Subprocess returned error: {error_msg}")
+                return AgentResult(messages=[], success=False, error=error_msg)
+            msg_count = len(data.get("messages", []))
+            sub_count = len(data.get("sub_agent_messages", []))
+            logger.info(f"Subprocess returned {msg_count} messages, {sub_count} sub-agent messages")
             return AgentResult(
                 messages=data.get("messages", []),
                 sub_agent_messages=data.get("sub_agent_messages", []),
@@ -92,11 +143,14 @@ class StdioAdapter(BridgeAdapter):
                 success=True,
             )
         except asyncio.TimeoutError:
+            logger.error(f"Timeout waiting for subprocess response ({self.timeout_seconds}s)")
             await self.disconnect()
-            return AgentResult(messages=[], success=False, error="Adapter timeout")
+            return AgentResult(messages=[], success=False, error=f"Timeout: subprocess did not respond within {self.timeout_seconds}s")
         except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON from subprocess: {e}")
             return AgentResult(messages=[], success=False, error=f"Invalid JSON: {e}")
         except OSError as e:
+            logger.error(f"Process error: {e}")
             return AgentResult(messages=[], success=False, error=f"Process error: {e}")
 
     async def get_judge_llm(self) -> LLMClient | None:
