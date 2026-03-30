@@ -1,24 +1,32 @@
 .backLink { color: #818cf8; text-decoration: none; font-size: 0.9rem; }
 .header { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
-.header h1 { margin: 0; color: #e2e8f0; }
+.header h1 { margin: 0; color: #e2e8f0; font-size: 1.3rem; }
 .meta { display: flex; gap: 1.5rem; color: #64748b; font-size: 0.85rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .startBtn { background: #22c55e; color: white; border: none; padding: 0.7rem 1.5rem; border-radius: 6px; cursor: pointer; font-size: 1rem; }
 .startBtn:hover { background: #16a34a; }
 .startBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 .progressLog { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 1rem; margin: 1rem 0; max-height: 200px; overflow-y: auto; }
 .progressLog h3 { margin: 0 0 0.5rem; color: #fbbf24; }
-.logLine { font-family: monospace; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.2rem; }
+.logLine { font-family: monospace; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.2rem; word-break: break-all; }
 .summary { display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0 0.5rem; }
-.summary h2 { margin: 0; color: #e2e8f0; }
+.summary h2 { margin: 0; color: #e2e8f0; font-size: 1.1rem; }
 .exportBtn { background: #6366f1; color: white; border: none; padding: 0.4rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
-.table { width: 100%; border-collapse: collapse; }
-.table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e293b; }
-.table th { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+
+.tableWrap { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.table th, .table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #1e293b; overflow: hidden; text-overflow: ellipsis; }
+.table th { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; }
+.colTc { width: 70px; }
+.colPass { width: 60px; }
+.colDur { width: 80px; }
+.colScore { width: 70px; }
+.colReason { }
+
 .resultRow { cursor: pointer; }
 .resultRow:hover { background: #1e293b; }
-.reasoning { font-size: 0.85rem; color: #94a3b8; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reasoning { font-size: 0.8rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .expandedRow td { background: #0f172a; }
-.detail { padding: 1rem; }
-.detail h4 { color: #a5b4fc; margin: 0.5rem 0 0.3rem; }
-.detail p { color: #e2e8f0; white-space: pre-wrap; }
-.detail pre { background: #1e293b; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; color: #94a3b8; overflow-x: auto; }
+.detail { padding: 1rem; max-width: 100%; overflow: hidden; }
+.detail h4 { color: #a5b4fc; margin: 0.5rem 0 0.3rem; font-size: 0.85rem; }
+.detail p { color: #e2e8f0; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; line-height: 1.5; }
+.detail pre { background: #1e293b; padding: 0.5rem; border-radius: 4px; font-size: 0.75rem; color: #94a3b8; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; }

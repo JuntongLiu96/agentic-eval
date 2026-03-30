@@ -6,6 +6,12 @@ import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
 import styles from './RunDetailPage.module.css'
 
+function formatScore(score: Record<string, unknown>): string {
+  const val = score?.score
+  if (typeof val === 'number') return String(val)
+  return '—'
+}
+
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>()
   const runId = Number(id)
@@ -39,7 +45,6 @@ export default function RunDetailPage() {
           queryClient.invalidateQueries({ queryKey: ['results', runId] })
         },
       )
-      // Fallback: if SSE doesn't connect after 5s, use direct start
       setTimeout(async () => {
         if (!receivedEvents) {
           cleanup()
@@ -100,37 +105,46 @@ export default function RunDetailPage() {
             <a href={exportRunUrl(runId)} download className={styles.exportBtn}>Export CSV</a>
           </div>
 
-          <table className={styles.table}>
-            <thead>
-              <tr><th>Test Case</th><th>Passed</th><th>Duration</th><th>Reasoning</th></tr>
-            </thead>
-            <tbody>
-              {results.map(r => (
-                <React.Fragment key={r.id}>
-                  <tr className={styles.resultRow} onClick={() => setExpandedRow(expandedRow === r.id ? null : r.id)}>
-                    <td>{r.test_case_id}</td>
-                    <td><PassFailIcon passed={r.passed} /></td>
-                    <td>{r.duration_ms}ms</td>
-                    <td className={styles.reasoning}>{r.judge_reasoning.slice(0, 80)}...</td>
-                  </tr>
-                  {expandedRow === r.id && (
-                    <tr className={styles.expandedRow}>
-                      <td colSpan={4}>
-                        <div className={styles.detail}>
-                          <h4>Full Reasoning</h4>
-                          <p>{r.judge_reasoning}</p>
-                          <h4>Score</h4>
-                          <pre>{JSON.stringify(r.score, null, 2)}</pre>
-                          <h4>Agent Messages</h4>
-                          <pre>{JSON.stringify(r.agent_messages, null, 2)}</pre>
-                        </div>
-                      </td>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.colTc}>TC</th>
+                  <th className={styles.colPass}>Pass</th>
+                  <th className={styles.colScore}>Score</th>
+                  <th className={styles.colDur}>Time</th>
+                  <th className={styles.colReason}>Justification</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map(r => (
+                  <React.Fragment key={r.id}>
+                    <tr className={styles.resultRow} onClick={() => setExpandedRow(expandedRow === r.id ? null : r.id)}>
+                      <td>{r.test_case_id}</td>
+                      <td><PassFailIcon passed={r.passed} /></td>
+                      <td>{formatScore(r.score)}</td>
+                      <td>{(r.duration_ms / 1000).toFixed(1)}s</td>
+                      <td className={styles.reasoning}>{r.judge_reasoning}</td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                    {expandedRow === r.id && (
+                      <tr className={styles.expandedRow}>
+                        <td colSpan={5}>
+                          <div className={styles.detail}>
+                            <h4>Justification</h4>
+                            <p>{r.judge_reasoning}</p>
+                            <h4>Score</h4>
+                            <pre>{JSON.stringify(r.score, null, 2)}</pre>
+                            <h4>Agent Messages ({r.agent_messages.length})</h4>
+                            <pre>{JSON.stringify(r.agent_messages, null, 2)}</pre>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>
