@@ -73,7 +73,7 @@ export default function RunsPage() {
 
       <table className={styles.table}>
         <thead>
-          <tr><th>ID</th><th>Name</th><th>Status</th><th>Dataset</th><th>Scorer</th><th>Adapter</th><th>Created</th><th>Actions</th></tr>
+          <tr><th>ID</th><th>Name</th><th>Status</th><th>Dataset ID</th><th>Scorer ID</th><th>Adapter ID</th><th>Created</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {runs?.map(r => (

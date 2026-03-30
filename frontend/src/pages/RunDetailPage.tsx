@@ -78,9 +78,9 @@ export default function RunDetailPage() {
       </div>
 
       <div className={styles.meta}>
-        <span>Dataset: {run?.dataset_id}</span>
-        <span>Scorer: {run?.scorer_id}</span>
-        <span>Adapter: {run?.adapter_id}</span>
+        <span>Dataset ID: {run?.dataset_id}</span>
+        <span>Scorer ID: {run?.scorer_id}</span>
+        <span>Adapter ID: {run?.adapter_id}</span>
         {run?.started_at && <span>Started: {run.started_at}</span>}
         {run?.finished_at && <span>Finished: {run.finished_at}</span>}
       </div>
