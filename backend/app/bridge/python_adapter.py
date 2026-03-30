@@ -36,8 +36,13 @@ class PythonAdapter(BridgeAdapter):
         try:
             result = await self._instance.send_test(test_data)
             if isinstance(result, AgentResult): return result
-            return AgentResult(messages=result.get("messages", []), metadata=result.get("metadata", {}),
-                             success=result.get("success", True), error=result.get("error"))
+            return AgentResult(
+                messages=result.get("messages", []),
+                sub_agent_messages=result.get("sub_agent_messages", []),
+                metadata=result.get("metadata", {}),
+                success=result.get("success", True),
+                error=result.get("error"),
+            )
         except Exception as e:
             return AgentResult(messages=[], success=False, error=str(e))
 

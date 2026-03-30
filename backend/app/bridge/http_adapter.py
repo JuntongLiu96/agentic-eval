@@ -76,8 +76,14 @@ class HTTPAdapter(BridgeAdapter):
                 return AgentResult(messages=[], success=False, error=error_msg)
             data = resp.json()
             msg_count = len(data.get("messages", []))
-            logger.info(f"Agent returned {msg_count} messages")
-            return AgentResult(messages=data.get("messages", []), metadata=data.get("metadata", {}), success=True)
+            sub_count = len(data.get("sub_agent_messages", []))
+            logger.info(f"Agent returned {msg_count} messages, {sub_count} sub-agent messages")
+            return AgentResult(
+                messages=data.get("messages", []),
+                sub_agent_messages=data.get("sub_agent_messages", []),
+                metadata=data.get("metadata", {}),
+                success=True,
+            )
         except httpx.TimeoutException as e:
             logger.error(f"Timeout waiting for agent response: {e}")
             return AgentResult(messages=[], success=False, error=f"Timeout: agent did not respond within the configured timeout. {e}")

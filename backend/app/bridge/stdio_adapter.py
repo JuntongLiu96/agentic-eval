@@ -85,7 +85,12 @@ class StdioAdapter(BridgeAdapter):
             data = json.loads(line.decode().strip())
             if data.get("type") == "error":
                 return AgentResult(messages=[], success=False, error=data.get("message", "Unknown error"))
-            return AgentResult(messages=data.get("messages", []), metadata=data.get("metadata", {}), success=True)
+            return AgentResult(
+                messages=data.get("messages", []),
+                sub_agent_messages=data.get("sub_agent_messages", []),
+                metadata=data.get("metadata", {}),
+                success=True,
+            )
         except asyncio.TimeoutError:
             await self.disconnect()
             return AgentResult(messages=[], success=False, error="Adapter timeout")

@@ -6,6 +6,7 @@ from typing import Any, Protocol, runtime_checkable
 @dataclass
 class AgentResult:
     messages: list[dict[str, Any]]
+    sub_agent_messages: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     success: bool = True
     error: str | None = None

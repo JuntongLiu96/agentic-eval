@@ -52,20 +52,29 @@ def resolve_judge_llm(judge_config: dict[str, Any], adapter_llm: LLMClient | Non
     raise ValueError("No judge LLM configured. Set JUDGE_MODEL/JUDGE_API_KEY env vars or configure an override in judge_config.")
 
 def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
-                          agent_messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+                          agent_messages: list[dict[str, Any]],
+                          sub_agent_messages: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
     """Assemble the judge prompt from the scorer's eval_prompt, expected result, and agent output.
 
     The eval_prompt contains everything: scoring criteria, score range, and scoring rules.
     """
+    sub_agent_section = ""
+    if sub_agent_messages:
+        sub_agent_section = f"""
+
+## Sub-Agent Messages (internal agent calls)
+{json.dumps(sub_agent_messages, indent=2)}
+"""
+
     user_content = f"""## Scoring Criteria & Rules
 {eval_prompt}
 
 ## Expected Result
 {json.dumps(expected_result, indent=2)}
 
-## Agent Output (message list)
+## Agent Output (main agent message list)
 {json.dumps(agent_messages, indent=2)}
-
+{sub_agent_section}
 Respond with a JSON object containing:
 - "score": a numeric score value per the scoring rules above
 - "justification": a detailed explanation of why you assigned this score, referencing specific scoring criteria and specific parts of the agent's output

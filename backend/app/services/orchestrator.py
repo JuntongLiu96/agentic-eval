@@ -74,15 +74,22 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
             continue
 
         try:
-            logger.info(f"Run #{run_id} case {tc.name}: agent returned {len(agent_result.messages)} messages, calling judge...")
+            sub_count = len(agent_result.sub_agent_messages)
+            logger.info(f"Run #{run_id} case {tc.name}: agent returned {len(agent_result.messages)} messages + {sub_count} sub-agent messages, calling judge...")
             judge_messages = assemble_judge_prompt(
                 eval_prompt=scorer.eval_prompt, expected_result=expected,
-                agent_messages=agent_result.messages)
+                agent_messages=agent_result.messages,
+                sub_agent_messages=agent_result.sub_agent_messages or None)
             judge_response = await judge_client.chat(judge_messages)
             parsed = parse_judge_response(judge_response, scorer.pass_threshold)
             logger.info(f"Run #{run_id} case {tc.name}: score={parsed['score']}, passed={parsed['passed']}")
+            # Store both main and sub-agent messages together for the result record
+            all_messages = {
+                "main": agent_result.messages,
+                "sub_agents": agent_result.sub_agent_messages,
+            } if agent_result.sub_agent_messages else agent_result.messages
             eval_result = EvalResult(run_id=run_id, test_case_id=tc.id,
-                agent_messages=json.dumps(agent_result.messages), score=json.dumps(parsed["score"]),
+                agent_messages=json.dumps(all_messages), score=json.dumps(parsed["score"]),
                 judge_reasoning=parsed["justification"], passed=parsed["passed"],
                 duration_ms=int((time.monotonic() - start_time) * 1000))
         except Exception as e:

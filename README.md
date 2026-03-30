@@ -117,11 +117,21 @@ This endpoint receives a user prompt and runs your agent's **complete end-to-end
     {"role": "tool", "content": "{\"flights\": [{\"airline\": \"ANA\", \"price\": 850}]}"},
     {"role": "assistant", "content": "I found a flight on ANA for $850. Would you like to book it?"}
   ],
+  "sub_agent_messages": [
+    {"role": "system", "content": "You are a flight search agent..."},
+    {"role": "user", "content": "Search flights SEA to TYO on 2026-04-04"},
+    {"role": "assistant", "content": "Found 3 flights: ANA $850, JAL $920, United $780"},
+    {"role": "tool", "content": "{\"api\": \"flights_api\", \"results\": 3}"}
+  ],
   "metadata": {}
 }
 ```
 
-Return the **full message list** including all intermediate steps (tool calls, reasoning, etc.) — this is what the judge LLM will evaluate.
+- `messages` — **(required)** the main agent's full conversation history
+- `sub_agent_messages` — **(optional)** message lists from sub-agents (tool agents, planning agents, etc.) that ran as part of this workflow. The judge LLM will see these as additional context for evaluation.
+- `metadata` — optional pass-through data
+
+Return the **full message list** including all intermediate steps (tool calls, reasoning, etc.) — this is what the judge LLM will evaluate. If your agent delegates to sub-agents, include their conversations in `sub_agent_messages` so the judge can evaluate the complete workflow.
 
 #### `POST /eval/judge` — Direct LLM Call
 
@@ -206,14 +216,18 @@ This is the core eval endpoint. It should:
    - Use the agent's normal system prompt
    - Execute the full agent loop (tool calls, reasoning, memory, etc.)
    - Do NOT skip any steps — this must behave identically to a real user interaction
-4. Collect ALL messages from the conversation into a list
-5. Return: {"messages": [...], "metadata": {}}
+4. Collect ALL messages from the main agent conversation into a list
+5. If the agent delegates to sub-agents (tool agents, planning agents, etc.), collect their message lists too
+6. Return: {"messages": [...], "sub_agent_messages": [...], "metadata": {}}
 
 The messages array should include the full conversation history in order:
 - {"role": "user", "content": "the prompt"}
 - {"role": "assistant", "content": "agent's response"}
 - {"role": "tool", "content": "tool results"} (if applicable)
 - ... any additional turns
+
+The sub_agent_messages array is OPTIONAL — include it only if your agent uses sub-agents.
+Each entry is a message from a sub-agent's conversation (same role/content format).
 
 Example request:
 ```json
@@ -228,6 +242,11 @@ Example response:
     {"role": "assistant", "content": "Let me check the weather for you."},
     {"role": "tool", "content": "{\"temp\": 55, \"condition\": \"cloudy\"}"},
     {"role": "assistant", "content": "It's currently 55°F and cloudy in Seattle."}
+  ],
+  "sub_agent_messages": [
+    {"role": "system", "content": "You are a weather lookup agent."},
+    {"role": "user", "content": "Get weather for Seattle, WA"},
+    {"role": "assistant", "content": "Temperature: 55°F, Condition: cloudy"}
   ],
   "metadata": {}
 }
@@ -269,7 +288,7 @@ Example response:
 | Agent loop | YES — full e2e agent workflow | NO — just a raw LLM call |
 | Tools | YES — agent uses its tools normally | NO — no tools, no agent logic |
 | Input | User prompt string | Chat messages array |
-| Output | Full message list from agent run | Raw LLM response text |
+| Output | Full message list + sub-agent messages | Raw LLM response text |
 
 ## Requirements
 - These endpoints should be added alongside the existing server routes

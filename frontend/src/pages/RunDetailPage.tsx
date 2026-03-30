@@ -134,8 +134,24 @@ export default function RunDetailPage() {
                             <p>{r.judge_reasoning}</p>
                             <h4>Score</h4>
                             <pre>{JSON.stringify(r.score, null, 2)}</pre>
-                            <h4>Agent Messages ({r.agent_messages.length})</h4>
-                            <pre>{JSON.stringify(r.agent_messages, null, 2)}</pre>
+                            {/* Handle both formats: {main: [...], sub_agents: [...]} or flat [...] */}
+                            {Array.isArray(r.agent_messages) ? (
+                              <>
+                                <h4>Agent Messages ({r.agent_messages.length})</h4>
+                                <pre>{JSON.stringify(r.agent_messages, null, 2)}</pre>
+                              </>
+                            ) : (
+                              <>
+                                <h4>Main Agent Messages ({(r.agent_messages as any)?.main?.length ?? 0})</h4>
+                                <pre>{JSON.stringify((r.agent_messages as any)?.main, null, 2)}</pre>
+                                {(r.agent_messages as any)?.sub_agents?.length > 0 && (
+                                  <>
+                                    <h4>Sub-Agent Messages ({(r.agent_messages as any).sub_agents.length})</h4>
+                                    <pre>{JSON.stringify((r.agent_messages as any).sub_agents, null, 2)}</pre>
+                                  </>
+                                )}
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
