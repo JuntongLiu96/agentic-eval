@@ -1,8 +1,9 @@
 """Dataset management CLI commands."""
+import json
 import typer
 from rich.console import Console
 from rich.table import Table
-from cli.api_client import ApiClient, state
+from cli.api_client import ApiClient, state, parse_json_arg
 
 datasets_app = typer.Typer(help="Manage eval datasets and test cases")
 console = Console()
@@ -91,3 +92,61 @@ def export_csv(
     """Export test cases from a dataset to a CSV file."""
     _client().download(f"/api/datasets/{dataset_id}/export", output_path=output)
     console.print(f"[green]Exported to {output}[/green]")
+
+
+@datasets_app.command("add-case")
+def add_case(
+    dataset_id: int = typer.Argument(..., help="Dataset ID to add the test case to"),
+    name: str = typer.Option(..., "--name", "-n", help="Test case name"),
+    prompt: str = typer.Option(..., "--prompt", "-p", help="User prompt to send to the agent"),
+    expected: str = typer.Option(..., "--expected", "-e",
+                                  help="Expected result as JSON string (e.g. '{\"answer\": \"4\"}')"),
+):
+    """Add a single test case to a dataset."""
+    expected_parsed = parse_json_arg(expected, "--expected")
+    payload = {
+        "name": name,
+        "data": {"prompt": prompt},
+        "expected_result": expected_parsed,
+    }
+    tc = _client().post(f"/api/datasets/{dataset_id}/testcases", json=payload)
+    console.print(f"[green]Added test case #{tc['id']}: {tc['name']}[/green]")
+
+
+@datasets_app.command("list-cases")
+def list_cases(dataset_id: int = typer.Argument(..., help="Dataset ID")):
+    """List all test cases in a dataset."""
+    data = _client().get(f"/api/datasets/{dataset_id}/testcases")
+    if not data:
+        console.print("[yellow]No test cases found.[/yellow]")
+        return
+    table = Table(title=f"Test Cases (Dataset #{dataset_id})")
+    table.add_column("ID", style="cyan", width=6)
+    table.add_column("Name", style="green")
+    table.add_column("Prompt")
+    table.add_column("Expected Result")
+    for tc in data:
+        prompt_data = tc.get("data", {})
+        prompt_str = prompt_data.get("prompt", json.dumps(prompt_data)) if isinstance(prompt_data, dict) else str(prompt_data)
+        expected_str = json.dumps(tc.get("expected_result", {}))
+        table.add_row(
+            str(tc["id"]),
+            tc["name"],
+            prompt_str[:60] + ("..." if len(prompt_str) > 60 else ""),
+            expected_str[:60] + ("..." if len(expected_str) > 60 else ""),
+        )
+    console.print(table)
+
+
+@datasets_app.command("delete-case")
+def delete_case(
+    testcase_id: int = typer.Argument(..., help="Test case ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Delete a single test case."""
+    if not yes:
+        confirm = typer.confirm(f"Delete test case {testcase_id}?")
+        if not confirm:
+            raise typer.Abort()
+    _client().delete(f"/api/testcases/{testcase_id}")
+    console.print(f"[green]Deleted test case {testcase_id}.[/green]")

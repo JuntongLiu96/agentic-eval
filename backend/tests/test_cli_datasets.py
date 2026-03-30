@@ -82,3 +82,49 @@ class TestDatasetsExportCmd:
         result = runner.invoke(app, ["datasets", "export-csv", "1", "--output", "out.csv"])
         assert result.exit_code == 0
         assert "out.csv" in result.stdout
+
+
+class TestAddCaseCmd:
+    @patch("cli.datasets.ApiClient")
+    def test_add_case(self, MockClient):
+        mock = MockClient.return_value
+        mock.post.return_value = {"id": 10, "name": "tc1", "dataset_id": 1,
+                                  "data": {"prompt": "What is 2+2?"},
+                                  "expected_result": {"answer": "4"}, "metadata": {}}
+        result = runner.invoke(app, ["datasets", "add-case", "1",
+                                     "--name", "tc1",
+                                     "--prompt", "What is 2+2?",
+                                     "--expected", '{"answer": "4"}'])
+        assert result.exit_code == 0
+        assert "tc1" in result.stdout
+
+
+class TestListCasesCmd:
+    @patch("cli.datasets.ApiClient")
+    def test_list_cases(self, MockClient):
+        mock = MockClient.return_value
+        mock.get.return_value = [
+            {"id": 1, "name": "tc1", "dataset_id": 1,
+             "data": {"prompt": "What is 2+2?"}, "expected_result": {"answer": "4"}, "metadata": {}}
+        ]
+        result = runner.invoke(app, ["datasets", "list-cases", "1"])
+        assert result.exit_code == 0
+        assert "tc1" in result.stdout
+
+    @patch("cli.datasets.ApiClient")
+    def test_list_cases_empty(self, MockClient):
+        mock = MockClient.return_value
+        mock.get.return_value = []
+        result = runner.invoke(app, ["datasets", "list-cases", "1"])
+        assert result.exit_code == 0
+        assert "No test cases" in result.stdout
+
+
+class TestDeleteCaseCmd:
+    @patch("cli.datasets.ApiClient")
+    def test_delete_case(self, MockClient):
+        mock = MockClient.return_value
+        mock.delete.return_value = None
+        result = runner.invoke(app, ["datasets", "delete-case", "1", "--yes"])
+        assert result.exit_code == 0
+        assert "Deleted" in result.stdout
