@@ -14,6 +14,9 @@
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e293b; }
 .table th { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+.link { color: #818cf8; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+.btnSmall { background: #334155; color: #e2e8f0; border: none; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .empty { color: #64748b; text-align: center; padding: 2rem; }
 
 /* Modal overlay */
@@ -46,6 +49,8 @@
 }
 
 .modalHeader h2 { margin: 0; color: #e2e8f0; }
+
+.modalHeaderActions { display: flex; gap: 0.5rem; align-items: center; }
 
 .modalClose {
   background: none;
@@ -119,3 +124,37 @@
   max-height: 200px;
   overflow-y: auto;
 }
+
+/* Scorer preview */
+.scorerPreview { display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem; }
+.previewField { display: flex; gap: 0.5rem; }
+.previewField .fieldLabel { min-width: 120px; }
+.previewPrompt { display: flex; flex-direction: column; gap: 0.3rem; }
+.fieldLabel { color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; }
+.promptPre {
+  background: #1e293b;
+  padding: 0.8rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Scorer edit form inside modal */
+.editFormModal { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+.editFormModal input, .editFormModal textarea {
+  background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+  padding: 0.5rem; border-radius: 4px; font-size: 0.9rem;
+}
+.editFormModal textarea {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  min-height: 200px;
+}
+.editActions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
