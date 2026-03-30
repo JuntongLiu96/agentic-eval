@@ -1,8 +1,11 @@
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 .header h1 { margin: 0; color: #e2e8f0; }
+.headerActions { display: flex; gap: 0.5rem; }
 .btn { background: #6366f1; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
 .btn:hover { background: #818cf8; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnOutline { background: transparent; color: #a78bfa; border: 1px solid #a78bfa; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+.btnOutline:hover { background: #1e1b4b; }
 .btnDanger { background: #dc2626; color: white; border: none; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .btnDanger:hover { background: #ef4444; }
 .form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
@@ -11,6 +14,108 @@
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e293b; }
 .table th { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
-.table a { color: #818cf8; text-decoration: none; }
-.table a:hover { text-decoration: underline; }
 .empty { color: #64748b; text-align: center; padding: 2rem; }
+
+/* Modal overlay */
+.modalOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.modalHeader h2 { margin: 0; color: #e2e8f0; }
+
+.modalClose {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+.modalClose:hover { background: #1e293b; color: #e2e8f0; }
+
+.modalSubtitle { color: #94a3b8; margin-bottom: 1.2rem; font-size: 0.9rem; }
+
+/* Template cards inside modal */
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.templateCard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1.2rem;
+}
+
+.templateCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.templateCardHeader h3 { margin: 0; color: #e2e8f0; font-size: 1rem; }
+
+.templateBadge {
+  background: #3b0764;
+  color: #c084fc;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+}
+
+.templateDesc { color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.5rem; }
+
+.copyBtn {
+  background: #22c55e;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  width: 100%;
+}
+.copyBtn:hover { background: #16a34a; }
+
+.templateDetails { margin-top: 0.5rem; color: #94a3b8; font-size: 0.85rem; }
+.templateDetails summary { cursor: pointer; color: #818cf8; }
+.templatePre {
+  background: #0f172a;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}

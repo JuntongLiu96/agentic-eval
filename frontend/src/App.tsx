@@ -4,7 +4,6 @@ import styles from './App.module.css'
 import DatasetsPage from './pages/DatasetsPage'
 import DatasetDetailPage from './pages/DatasetDetailPage'
 import ScorersPage from './pages/ScorersPage'
-import TemplatesPage from './pages/TemplatesPage'
 import AdaptersPage from './pages/AdaptersPage'
 import RunsPage from './pages/RunsPage'
 import RunDetailPage from './pages/RunDetailPage'
@@ -25,7 +24,6 @@ export default function App() {
           <li><Link to="/" className={isActive('/runs') || location.pathname === '/' ? styles.active : ''}>Runs</Link></li>
           <li><Link to="/datasets" className={isActive('/datasets') ? styles.active : ''}>Datasets</Link></li>
           <li><Link to="/scorers" className={isActive('/scorers') ? styles.active : ''}>Scorers</Link></li>
-          <li><Link to="/templates" className={isActive('/templates') ? styles.active : ''}>Templates</Link></li>
           <li><Link to="/adapters" className={isActive('/adapters') ? styles.active : ''}>Adapters</Link></li>
         </ul>
       </nav>
@@ -35,7 +33,6 @@ export default function App() {
           <Route path="/datasets" element={<DatasetsPage />} />
           <Route path="/datasets/:id" element={<DatasetDetailPage />} />
           <Route path="/scorers" element={<ScorersPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/adapters" element={<AdaptersPage />} />
           <Route path="/runs/compare" element={<ComparePage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
