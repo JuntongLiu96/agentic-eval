@@ -6,7 +6,7 @@ class EvalResultResponse(BaseModel):
     id: int
     run_id: int
     test_case_id: int
-    agent_messages: list[dict[str, Any]]
+    agent_messages: Any  # list[dict] or {"main": [...], "sub_agents": [...]}
     score: dict[str, Any]
     judge_reasoning: str
     passed: bool
