@@ -21,13 +21,13 @@ export default function RunDetailPage() {
   const { data: run, refetch: refetchRun } = useQuery({
     queryKey: ['run', runId],
     queryFn: () => getRun(runId),
-    refetchInterval: run?.status === 'running' ? 5000 : false,
+    refetchInterval: (query) => query.state.data?.status === 'running' ? 5000 : false,
   })
   const { data: results } = useQuery({
     queryKey: ['results', runId],
     queryFn: () => getRunResults(runId),
     enabled: run?.status === 'completed' || run?.status === 'failed' || run?.status === 'running',
-    refetchInterval: run?.status === 'running' ? 5000 : false,
+    refetchInterval: () => run?.status === 'running' ? 5000 : false,
   })
   const { data: testCases } = useQuery({
     queryKey: ['testCases', run?.dataset_id],

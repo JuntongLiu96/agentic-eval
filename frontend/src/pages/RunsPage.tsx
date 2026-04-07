@@ -14,7 +14,7 @@ export default function RunsPage() {
   const { data: runs, isLoading } = useQuery({
     queryKey: ['runs'],
     queryFn: listRuns,
-    refetchInterval: runs?.some(r => r.status === 'running') ? 10000 : false,
+    refetchInterval: (query) => query.state.data?.some(r => r.status === 'running') ? 10000 : false,
   })
   const { data: datasets } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets })
   const { data: scorers } = useQuery({ queryKey: ['scorers'], queryFn: listScorers })
