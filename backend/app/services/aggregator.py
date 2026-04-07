@@ -17,7 +17,9 @@ async def aggregate_run_results(run_id: int, db: AsyncSession) -> dict[str, Any]
     scores = []
     for r in results:
         score_data = json.loads(r.score) if isinstance(r.score, str) else r.score
-        if isinstance(score_data, dict):
+        if isinstance(score_data, (int, float)):
+            scores.append(score_data)
+        elif isinstance(score_data, dict):
             if "score" in score_data and isinstance(score_data["score"], (int, float)):
                 scores.append(score_data["score"])
             elif "overall_score" in score_data:

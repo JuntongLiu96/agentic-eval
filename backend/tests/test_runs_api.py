@@ -82,6 +82,24 @@ async def test_delete_run_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_create_run_invalid_ids(client):
+    """Creating a run with dataset_id=0 should return 422."""
+    resp = await client.post("/api/runs", json={
+        "dataset_id": 0, "scorer_id": 1, "adapter_id": 1,
+    })
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_run_nonexistent_ids(client):
+    """Creating a run referencing non-existent records should return 404."""
+    resp = await client.post("/api/runs", json={
+        "dataset_id": 9999, "scorer_id": 9999, "adapter_id": 9999,
+    })
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_start_run_with_mock(client):
     """Full integration test: create all resources, start run with mocked bridge+judge."""
     ds = await client.post("/api/datasets", json={"name": "DS"})

@@ -50,7 +50,7 @@ def get_adapter(adapter_id: int = typer.Argument(..., help="Adapter ID")):
 def create_adapter(
     name: str = typer.Option(..., "--name", "-n", help="Adapter name"),
     adapter_type: str = typer.Option(..., "--type", "-t",
-                                      help="Adapter type: http, python, stdio"),
+                                      help="Adapter type: http, openclaw, python, stdio"),
     config_json: str = typer.Option(..., "--config", "-c", help="Config as JSON string"),
     description: str = typer.Option("", "--description", "-d", help="Description"),
 ):
@@ -66,7 +66,7 @@ def create_adapter(
 def update_adapter(
     adapter_id: int = typer.Argument(..., help="Adapter ID"),
     name: str = typer.Option(None, "--name", "-n", help="New adapter name"),
-    adapter_type: str = typer.Option(None, "--type", "-t", help="New type: http, python, stdio"),
+    adapter_type: str = typer.Option(None, "--type", "-t", help="New type: http, openclaw, python, stdio"),
     config_json: str = typer.Option(None, "--config", "-c", help="New config as JSON string"),
     description: str = typer.Option(None, "--description", "-d", help="New description"),
 ):

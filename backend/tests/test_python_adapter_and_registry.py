@@ -28,7 +28,7 @@ async def test_python_adapter_health_not_connected():
 # --- Registry tests ---
 
 def test_registry_has_all_types():
-    assert set(ADAPTER_TYPES.keys()) == {"http", "python", "stdio"}
+    assert set(ADAPTER_TYPES.keys()) == {"http", "python", "stdio", "openclaw"}
 
 def test_create_adapter_http():
     adapter = create_adapter("http")

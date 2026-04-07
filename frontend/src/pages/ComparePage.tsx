@@ -49,17 +49,19 @@ export default function ComparePage() {
               <h3>Run #{comparison.run1.id}</h3>
               <p>{comparison.run1.summary.passed}/{comparison.run1.summary.total} passed</p>
               <p className={styles.rate}>{(comparison.run1.summary.pass_rate * 100).toFixed(1)}%</p>
+              {comparison.run1.summary.avg_score != null && <p>Avg score: {comparison.run1.summary.avg_score.toFixed(2)}</p>}
             </div>
             <div className={styles.summaryCard}>
               <h3>Run #{comparison.run2.id}</h3>
               <p>{comparison.run2.summary.passed}/{comparison.run2.summary.total} passed</p>
               <p className={styles.rate}>{(comparison.run2.summary.pass_rate * 100).toFixed(1)}%</p>
+              {comparison.run2.summary.avg_score != null && <p>Avg score: {comparison.run2.summary.avg_score.toFixed(2)}</p>}
             </div>
           </div>
 
           <table className={styles.table}>
             <thead>
-              <tr><th>Test Case</th><th>Run 1</th><th>Run 2</th><th>Changed</th></tr>
+              <tr><th>Test Case</th><th>Run 1</th><th>Run 2</th><th>Run 1 Score</th><th>Run 2 Score</th><th>Δ</th><th>Changed</th></tr>
             </thead>
             <tbody>
               {comparison.comparisons.map(c => (
@@ -67,6 +69,13 @@ export default function ComparePage() {
                   <td>{c.test_case_id}</td>
                   <td><PassFailIcon passed={c.run1_passed} /></td>
                   <td><PassFailIcon passed={c.run2_passed} /></td>
+                  <td>{c.run1_score != null ? c.run1_score : '—'}</td>
+                  <td>{c.run2_score != null ? c.run2_score : '—'}</td>
+                  <td>{c.run1_score != null && c.run2_score != null ? (
+                    <span style={{ color: c.run2_score - c.run1_score > 0 ? '#22c55e' : c.run2_score - c.run1_score < 0 ? '#ef4444' : '#94a3b8' }}>
+                      {c.run2_score - c.run1_score > 0 ? '+' : ''}{(c.run2_score - c.run1_score).toFixed(2)}
+                    </span>
+                  ) : '—'}</td>
                   <td>{c.changed ? <span className={styles.changedLabel}>CHANGED</span> : ''}</td>
                 </tr>
               ))}

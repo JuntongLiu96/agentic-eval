@@ -134,5 +134,7 @@ export interface TestCaseComparison {
   test_case_id: number
   run1_passed: boolean
   run2_passed: boolean
+  run1_score: number | null
+  run2_score: number | null
   changed: boolean
 }

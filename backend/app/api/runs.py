@@ -10,8 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.db.database import get_db, async_session
+from app.models.adapter import Adapter
+from app.models.dataset import Dataset
 from app.models.eval_result import EvalResult
 from app.models.eval_run import EvalRun, RunStatus
+from app.models.scorer import Scorer
 from app.schemas.eval_result import EvalResultResponse
 from app.schemas.eval_run import EvalRunCreate, EvalRunResponse
 from app.services.aggregator import aggregate_run_results
@@ -22,6 +25,23 @@ router = APIRouter(prefix="/api", tags=["runs"])
 
 @router.post("/runs", response_model=EvalRunResponse, status_code=201)
 async def create_run(payload: EvalRunCreate, db: AsyncSession = Depends(get_db)):
+    # Validate IDs are positive
+    for field_name, field_val in [
+        ("dataset_id", payload.dataset_id),
+        ("scorer_id", payload.scorer_id),
+        ("adapter_id", payload.adapter_id),
+    ]:
+        if field_val is None or field_val <= 0:
+            raise HTTPException(status_code=422, detail=f"{field_name} must be a positive integer")
+
+    # Validate referenced records exist
+    if not await db.get(Dataset, payload.dataset_id):
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if not await db.get(Scorer, payload.scorer_id):
+        raise HTTPException(status_code=404, detail="Scorer not found")
+    if not await db.get(Adapter, payload.adapter_id):
+        raise HTTPException(status_code=404, detail="Adapter not found")
+
     run = EvalRun(
         name=payload.name, dataset_id=payload.dataset_id,
         scorer_id=payload.scorer_id, adapter_id=payload.adapter_id,
@@ -49,12 +69,28 @@ async def compare_runs(run1: int, run2: int, db: AsyncSession = Depends(get_db))
     results1 = {r.test_case_id: r for r in r1.scalars().all()}
     results2 = {r.test_case_id: r for r in r2.scalars().all()}
     common_ids = set(results1.keys()) & set(results2.keys())
+
+    def extract_score(s: Any):
+        if isinstance(s, str):
+            try:
+                s = json.loads(s)
+            except Exception:
+                return None
+        if isinstance(s, (int, float)):
+            return s
+        if isinstance(s, dict) and "score" in s:
+            v = s["score"]
+            return v if isinstance(v, (int, float)) else None
+        return None
+
     comparisons = []
     for tc_id in common_ids:
         comparisons.append({
             "test_case_id": tc_id,
             "run1_passed": results1[tc_id].passed,
             "run2_passed": results2[tc_id].passed,
+            "run1_score": extract_score(results1[tc_id].score),
+            "run2_score": extract_score(results2[tc_id].score),
             "changed": results1[tc_id].passed != results2[tc_id].passed,
         })
     return {

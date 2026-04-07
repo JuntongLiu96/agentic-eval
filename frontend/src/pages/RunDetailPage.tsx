@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRun, getRunResults, startRun, streamRun, exportRunUrl } from '../api/runs'
+import { listTestCases } from '../api/datasets'
 import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
 import styles from './RunDetailPage.module.css'
@@ -17,11 +18,21 @@ export default function RunDetailPage() {
   const runId = Number(id)
   const queryClient = useQueryClient()
 
-  const { data: run, refetch: refetchRun } = useQuery({ queryKey: ['run', runId], queryFn: () => getRun(runId) })
+  const { data: run, refetch: refetchRun } = useQuery({
+    queryKey: ['run', runId],
+    queryFn: () => getRun(runId),
+    refetchInterval: run?.status === 'running' ? 5000 : false,
+  })
   const { data: results } = useQuery({
     queryKey: ['results', runId],
     queryFn: () => getRunResults(runId),
-    enabled: run?.status === 'completed' || run?.status === 'failed',
+    enabled: run?.status === 'completed' || run?.status === 'failed' || run?.status === 'running',
+    refetchInterval: run?.status === 'running' ? 5000 : false,
+  })
+  const { data: testCases } = useQuery({
+    queryKey: ['testCases', run?.dataset_id],
+    queryFn: () => listTestCases(run!.dataset_id),
+    enabled: !!run?.dataset_id,
   })
 
   const [isRunning, setIsRunning] = useState(false)
@@ -89,6 +100,12 @@ export default function RunDetailPage() {
         <button className={styles.startBtn} onClick={handleStart} disabled={isRunning}>
           {isRunning ? 'Running...' : 'Start Run'}
         </button>
+      )}
+
+      {run?.status === 'running' && (
+        <div className={styles.progressInfo}>
+          {results ? results.length : 0}/{testCases ? testCases.length : '?'} test cases completed
+        </div>
       )}
 
       {isRunning && progress.length > 0 && (

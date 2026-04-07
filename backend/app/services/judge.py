@@ -24,9 +24,12 @@ class DefaultLLMClient:
         self.base_url = base_url.rstrip("/") if base_url else "https://api.openai.com/v1"
 
     async def chat(self, messages: list[dict[str, str]]) -> str:
+        base = self.base_url.rstrip("/")
+        if not base.endswith("/v1"):
+            base += "/v1"
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
-                f"{self.base_url}/chat/completions",
+                f"{base}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={"model": self.model, "messages": messages},
             )
@@ -101,4 +104,4 @@ def parse_judge_response(response_text: str, pass_threshold: float | None) -> di
     threshold = pass_threshold if pass_threshold is not None else 60.0
     passed = score_val >= threshold
 
-    return {"score": data, "passed": passed, "justification": justification}
+    return {"score": score_val, "passed": passed, "justification": justification}

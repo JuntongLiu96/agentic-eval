@@ -11,7 +11,11 @@ import styles from './RunsPage.module.css'
 
 export default function RunsPage() {
   const queryClient = useQueryClient()
-  const { data: runs, isLoading } = useQuery({ queryKey: ['runs'], queryFn: listRuns })
+  const { data: runs, isLoading } = useQuery({
+    queryKey: ['runs'],
+    queryFn: listRuns,
+    refetchInterval: runs?.some(r => r.status === 'running') ? 10000 : false,
+  })
   const { data: datasets } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets })
   const { data: scorers } = useQuery({ queryKey: ['scorers'], queryFn: listScorers })
   const { data: adapters } = useQuery({ queryKey: ['adapters'], queryFn: listAdapters })
@@ -67,13 +71,13 @@ export default function RunsPage() {
             <option value={0} disabled>Select Adapter</option>
             {adapters?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <button type="submit" className={styles.btn} disabled={createMut.isPending}>Create Run</button>
+          <button type="submit" className={styles.btn} disabled={createMut.isPending || form.dataset_id === 0 || form.scorer_id === 0 || form.adapter_id === 0}>Create Run</button>
         </form>
       )}
 
       <table className={styles.table}>
         <thead>
-          <tr><th>ID</th><th>Name</th><th>Status</th><th>Dataset ID</th><th>Scorer ID</th><th>Adapter ID</th><th>Created</th><th>Actions</th></tr>
+          <tr><th>ID</th><th>Name</th><th>Status</th><th>Dataset</th><th>Scorer</th><th>Adapter</th><th>Created</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {runs?.map(r => (
@@ -81,9 +85,9 @@ export default function RunsPage() {
               <td>{r.id}</td>
               <td><Link to={`/runs/${r.id}`}>{r.name || `Run #${r.id}`}</Link></td>
               <td><StatusBadge status={r.status} /></td>
-              <td>{r.dataset_id}</td>
-              <td>{r.scorer_id}</td>
-              <td>{r.adapter_id}</td>
+              <td>{datasets?.find(d => d.id === r.dataset_id)?.name ?? r.dataset_id}</td>
+              <td>{scorers?.find(s => s.id === r.scorer_id)?.name ?? r.scorer_id}</td>
+              <td>{adapters?.find(a => a.id === r.adapter_id)?.name ?? r.adapter_id}</td>
               <td>{r.created_at.slice(0, 10)}</td>
               <td>
                 {r.status === 'pending' && (
