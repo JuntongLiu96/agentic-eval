@@ -5,7 +5,7 @@ description: Run evaluations against AI agents using the AgenticEval system. Use
 
 # AgenticEval — Agent Operation Guide
 
-Base URL: `http://localhost:9100` · All endpoints JSON · `Content-Type: application/json`
+All operations use the `agenticeval` CLI.
 
 Full API reference: [references/api-reference.md](references/api-reference.md)
 Scorer prompt writing guide: [references/scorer-guide.md](references/scorer-guide.md)
@@ -22,29 +22,20 @@ A dataset holds test cases — each is a prompt sent to the agent plus the expec
 
 ```bash
 # Create dataset
-curl -X POST http://localhost:9100/api/datasets \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-eval", "description": "Eval for X capability", "target_type": "agent", "tags": ["v1"]}'
+agenticeval datasets create --name "my-eval" --description "Eval for X capability" --target-type agent --tags "v1"
 # → returns {id, name, ...}
 ```
 
 Add test cases one by one:
 
 ```bash
-curl -X POST http://localhost:9100/api/datasets/{dataset_id}/testcases \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "basic-task",
-    "data": {"prompt": "What is 2+2?"},
-    "expected_result": {"answer": "4"}
-  }'
+agenticeval datasets add-case {dataset_id} --name "basic-task" --prompt "What is 2+2?" --expected '{"answer": "4"}'
 ```
 
 Or bulk import via CSV:
 
 ```bash
-curl -X POST http://localhost:9100/api/datasets/{dataset_id}/import \
-  -F "file=@testcases.csv"
+agenticeval datasets import-csv {dataset_id} --file testcases.csv
 ```
 
 CSV format: `name,data,expected_result,metadata`
@@ -56,14 +47,9 @@ CSV format: `name,data,expected_result,metadata`
 The scorer defines how the judge evaluates agent responses. The `eval_prompt` is the core — it tells the judge what dimensions to score and how.
 
 ```bash
-curl -X POST http://localhost:9100/api/scorers \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "quality-scorer",
-    "eval_prompt": "You are evaluating an AI agent...\n\nScore range: 0-100.\nReturn {\"score\": <0-100>, \"justification\": \"...\"}",
-    "pass_threshold": 70,
-    "tags": ["v1"]
-  }'
+agenticeval scorers create --name "quality-scorer" \
+  --eval-prompt "You are evaluating an AI agent...\n\nScore range: 0-100.\nReturn {\"score\": <0-100>, \"justification\": \"...\"}" \
+  --threshold 70 --tags "v1"
 ```
 
 Key facts:
@@ -78,13 +64,7 @@ The adapter tells AgenticEval how to communicate with the agent under test.
 **HTTP adapter** (recommended):
 
 ```bash
-curl -X POST http://localhost:9100/api/adapters \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "my-agent",
-    "type": "http",
-    "config": {"base_url": "http://localhost:8080"}
-  }'
+agenticeval adapters create --name "my-agent" --type http --config '{"base_url": "http://localhost:8080"}'
 ```
 
 The agent must expose these endpoints:
@@ -95,13 +75,7 @@ The agent must expose these endpoints:
 **Stdio adapter** (for CLI agents):
 
 ```bash
-curl -X POST http://localhost:9100/api/adapters \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "cli-agent",
-    "type": "stdio",
-    "config": {"command": "python", "args": ["agent.py"]}
-  }'
+agenticeval adapters create --name "cli-agent" --type stdio --config '{"command": "python", "args": ["agent.py"]}'
 ```
 
 ---
@@ -111,21 +85,18 @@ curl -X POST http://localhost:9100/api/adapters \
 ### 2.1 Create and Start a Run
 
 ```bash
-# Create run
-curl -X POST http://localhost:9100/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"dataset_id": "...", "scorer_id": "...", "adapter_id": "...", "name": "run-v1"}'
-# → returns {id, ...}
+# One-step create + start (recommended)
+agenticeval run --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "run-v1"
 
-# Start run (synchronous — waits for completion)
-curl -X POST http://localhost:9100/api/runs/{run_id}/start
+# Alternative: separate create + start
+agenticeval runs create --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "run-v1"
+agenticeval runs start {run_id}
 ```
 
 ### 2.2 Analyze Results
 
 ```bash
-# Get results
-curl http://localhost:9100/api/runs/{run_id}/results
+agenticeval runs results {run_id}
 ```
 
 Each result contains:
@@ -137,13 +108,13 @@ Each result contains:
 ### 2.3 Compare Runs
 
 ```bash
-curl "http://localhost:9100/api/runs/compare?run1_id={a}&run2_id={b}"
+agenticeval runs compare {run1_id} {run2_id}
 ```
 
 ### 2.4 Export Results
 
 ```bash
-curl http://localhost:9100/api/runs/{run_id}/export > results.csv
+agenticeval runs export {run_id} --output results.csv
 ```
 
 ---
@@ -167,24 +138,23 @@ Read `judge_reasoning` from failed/low-scoring results. Classify each issue:
 
 Add cases:
 ```bash
-curl -X POST http://localhost:9100/api/datasets/{dataset_id}/testcases \
-  -H "Content-Type: application/json" \
-  -d '{"name": "edge-case-1", "data": {"prompt": "..."}, "expected_result": {...}}'
+agenticeval datasets add-case {dataset_id} --name "edge-case-1" --prompt "..." --expected '{...}'
 ```
 
 Delete cases:
 ```bash
-curl -X DELETE http://localhost:9100/api/testcases/{testcase_id}
+agenticeval datasets delete-case {testcase_id} --yes
 ```
 
 Bulk update workflow:
-1. Export: `curl http://localhost:9100/api/datasets/{id}/export > cases.csv`
+1. Export: `agenticeval datasets export-csv {dataset_id} --output cases.csv`
 2. Edit the CSV
-3. Re-import: `curl -X POST http://localhost:9100/api/datasets/{id}/import -F "file=@cases.csv"`
+3. Re-import: `agenticeval datasets import-csv {dataset_id} --file cases.csv`
 
 ### 3.3 Update Scorer
 
 ```bash
+# CLI 暂不支持此操作
 curl -X PUT http://localhost:9100/api/scorers/{scorer_id} \
   -H "Content-Type: application/json" \
   -d '{"eval_prompt": "updated prompt...", "pass_threshold": 75}'
@@ -193,16 +163,11 @@ curl -X PUT http://localhost:9100/api/scorers/{scorer_id} \
 ### 3.4 Re-run and Compare
 
 ```bash
-# Create new run with updated dataset/scorer
-curl -X POST http://localhost:9100/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"dataset_id": "...", "scorer_id": "...", "adapter_id": "...", "name": "run-v2"}'
-
-# Start it
-curl -X POST http://localhost:9100/api/runs/{new_run_id}/start
+# Run with updated dataset/scorer
+agenticeval run --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "run-v2"
 
 # Compare with previous run
-curl "http://localhost:9100/api/runs/compare?run1_id={old}&run2_id={new}"
+agenticeval runs compare {old_run_id} {new_run_id}
 ```
 
 ### Iteration Loop
