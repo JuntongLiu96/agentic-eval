@@ -2,12 +2,15 @@ import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRun, getRunResults, startRun, streamRun, exportRunUrl } from '../api/runs'
-import { listTestCases } from '../api/datasets'
+import { listTestCases, listDatasets } from '../api/datasets'
+import { listScorers } from '../api/scorers'
+import { listAdapters } from '../api/adapters'
 import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
 import styles from './RunDetailPage.module.css'
 
-function formatScore(score: Record<string, unknown>): string {
+function formatScore(score: any): string {
+  if (typeof score === 'number') return String(score)
   const val = score?.score
   if (typeof val === 'number') return String(val)
   return '—'
@@ -34,6 +37,22 @@ export default function RunDetailPage() {
     queryFn: () => listTestCases(run!.dataset_id),
     enabled: !!run?.dataset_id,
   })
+  const { data: datasets } = useQuery({
+    queryKey: ['datasets'],
+    queryFn: listDatasets,
+  })
+  const { data: scorers } = useQuery({
+    queryKey: ['scorers'],
+    queryFn: listScorers,
+  })
+  const { data: adapters } = useQuery({
+    queryKey: ['adapters'],
+    queryFn: listAdapters,
+  })
+
+  const datasetName = datasets?.find(d => d.id === run?.dataset_id)?.name
+  const scorerName = scorers?.find(s => s.id === run?.scorer_id)?.name
+  const adapterName = adapters?.find(a => a.id === run?.adapter_id)?.name
 
   const [isRunning, setIsRunning] = useState(false)
   const [progress, setProgress] = useState<string[]>([])
@@ -89,9 +108,9 @@ export default function RunDetailPage() {
       </div>
 
       <div className={styles.meta}>
-        <span>Dataset ID: {run?.dataset_id}</span>
-        <span>Scorer ID: {run?.scorer_id}</span>
-        <span>Adapter ID: {run?.adapter_id}</span>
+        <span>Dataset: {datasetName ?? run?.dataset_id}</span>
+        <span>Scorer: {scorerName ?? run?.scorer_id}</span>
+        <span>Adapter: {adapterName ?? run?.adapter_id}</span>
         {run?.started_at && <span>Started: {run.started_at}</span>}
         {run?.finished_at && <span>Finished: {run.finished_at}</span>}
       </div>

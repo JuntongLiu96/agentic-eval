@@ -48,13 +48,13 @@ export default function ComparePage() {
             <div className={styles.summaryCard}>
               <h3>Run #{comparison.run1.id}</h3>
               <p>{comparison.run1.summary.passed}/{comparison.run1.summary.total} passed</p>
-              <p className={styles.rate}>{(comparison.run1.summary.pass_rate * 100).toFixed(1)}%</p>
+              <p className={styles.rate}>{comparison.run1.summary.pass_rate.toFixed(1)}%</p>
               {comparison.run1.summary.avg_score != null && <p>Avg score: {comparison.run1.summary.avg_score.toFixed(2)}</p>}
             </div>
             <div className={styles.summaryCard}>
               <h3>Run #{comparison.run2.id}</h3>
               <p>{comparison.run2.summary.passed}/{comparison.run2.summary.total} passed</p>
-              <p className={styles.rate}>{(comparison.run2.summary.pass_rate * 100).toFixed(1)}%</p>
+              <p className={styles.rate}>{comparison.run2.summary.pass_rate.toFixed(1)}%</p>
               {comparison.run2.summary.avg_score != null && <p>Avg score: {comparison.run2.summary.avg_score.toFixed(2)}</p>}
             </div>
           </div>
