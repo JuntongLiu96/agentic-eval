@@ -60,6 +60,31 @@ def create_dataset(
     console.print(f"[green]Created dataset #{d['id']}: {d['name']}[/green]")
 
 
+@datasets_app.command("update")
+def update_dataset(
+    dataset_id: int = typer.Argument(..., help="Dataset ID"),
+    name: str = typer.Option(None, "--name", "-n", help="New name"),
+    description: str = typer.Option(None, "--description", "-d", help="New description"),
+    target_type: str = typer.Option(None, "--target-type", "-t", help="New target type"),
+    tags: str = typer.Option(None, "--tags", help="New comma-separated tags"),
+):
+    """Update an existing dataset."""
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if description is not None:
+        payload["description"] = description
+    if target_type is not None:
+        payload["target_type"] = target_type
+    if tags is not None:
+        payload["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+    if not payload:
+        console.print("[yellow]Nothing to update. Provide at least one option.[/yellow]")
+        return
+    d = _client().put(f"/api/datasets/{dataset_id}", json=payload)
+    console.print(f"[green]Updated dataset #{d['id']}: {d['name']}[/green]")
+
+
 @datasets_app.command("delete")
 def delete_dataset(
     dataset_id: int = typer.Argument(..., help="Dataset ID"),
@@ -136,6 +161,28 @@ def list_cases(dataset_id: int = typer.Argument(..., help="Dataset ID")):
             expected_str[:60] + ("..." if len(expected_str) > 60 else ""),
         )
     console.print(table)
+
+
+@datasets_app.command("update-case")
+def update_case(
+    testcase_id: int = typer.Argument(..., help="Test case ID"),
+    name: str = typer.Option(None, "--name", "-n", help="New name"),
+    prompt: str = typer.Option(None, "--prompt", "-p", help="New prompt"),
+    expected: str = typer.Option(None, "--expected", "-e", help="New expected result (JSON)"),
+):
+    """Update an existing test case."""
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if prompt is not None:
+        payload["data"] = {"prompt": prompt}
+    if expected is not None:
+        payload["expected_result"] = parse_json_arg(expected, "--expected")
+    if not payload:
+        console.print("[yellow]Nothing to update. Provide at least one option.[/yellow]")
+        return
+    tc = _client().put(f"/api/testcases/{testcase_id}", json=payload)
+    console.print(f"[green]Updated test case #{tc['id']}: {tc['name']}[/green]")
 
 
 @datasets_app.command("delete-case")

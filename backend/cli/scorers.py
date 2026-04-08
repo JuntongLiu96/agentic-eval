@@ -64,6 +64,34 @@ def create_scorer(
     console.print(f"[green]Created scorer #{s['id']}: {s['name']}[/green]")
 
 
+@scorers_app.command("update")
+def update_scorer(
+    scorer_id: int = typer.Argument(..., help="Scorer ID"),
+    name: str = typer.Option(None, "--name", "-n", help="New scorer name"),
+    eval_prompt: str = typer.Option(None, "--eval-prompt", "-p", help="New eval prompt"),
+    description: str = typer.Option(None, "--description", "-d", help="New description"),
+    pass_threshold: float = typer.Option(None, "--threshold", "-t", help="New pass threshold"),
+    tags: str = typer.Option(None, "--tags", help="New comma-separated tags"),
+):
+    """Update an existing scorer."""
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if eval_prompt is not None:
+        payload["eval_prompt"] = eval_prompt
+    if description is not None:
+        payload["description"] = description
+    if pass_threshold is not None:
+        payload["pass_threshold"] = pass_threshold
+    if tags is not None:
+        payload["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+    if not payload:
+        console.print("[yellow]Nothing to update. Provide at least one option.[/yellow]")
+        return
+    s = _client().put(f"/api/scorers/{scorer_id}", json=payload)
+    console.print(f"[green]Updated scorer #{s['id']}: {s['name']}[/green]")
+
+
 @scorers_app.command("delete")
 def delete_scorer(
     scorer_id: int = typer.Argument(..., help="Scorer ID"),

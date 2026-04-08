@@ -154,10 +154,7 @@ Bulk update workflow:
 ### 3.3 Update Scorer
 
 ```bash
-# CLI 暂不支持此操作
-curl -X PUT http://localhost:9100/api/scorers/{scorer_id} \
-  -H "Content-Type: application/json" \
-  -d '{"eval_prompt": "updated prompt...", "pass_threshold": 75}'
+agenticeval scorers update {scorer_id} --eval-prompt "updated prompt..." --threshold 75
 ```
 
 ### 3.4 Re-run and Compare
