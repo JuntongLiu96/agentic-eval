@@ -98,7 +98,7 @@ def start_run(run_id: int = typer.Argument(..., help="Run ID to start")):
         total = summary.get("total", 0)
         passed = summary.get("passed", 0)
         rate = summary.get("pass_rate", 0)
-        console.print(f"  Total: {total}, Passed: {passed}, Pass Rate: {rate:.1%}")
+        console.print(f"  Total: {total}, Passed: {passed}, Pass Rate: {rate:.1f}%")
 
 
 @runs_app.command("results")
@@ -132,9 +132,9 @@ def compare_runs(
     s2 = data.get("run2", {}).get("summary", {})
 
     console.print(f"\n[bold]Run 1 (#{run1}):[/bold] {s1.get('passed', 0)}/{s1.get('total', 0)} passed "
-                  f"({s1.get('pass_rate', 0):.1%})")
+                  f"({s1.get('pass_rate', 0):.1f}%)")
     console.print(f"[bold]Run 2 (#{run2}):[/bold] {s2.get('passed', 0)}/{s2.get('total', 0)} passed "
-                  f"({s2.get('pass_rate', 0):.1%})")
+                  f"({s2.get('pass_rate', 0):.1f}%)")
 
     comparisons = data.get("comparisons", [])
     if comparisons:
