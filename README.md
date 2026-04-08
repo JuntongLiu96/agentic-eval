@@ -823,6 +823,25 @@ With the backend running, visit **http://localhost:9100/docs** for the auto-gene
 | Testing | pytest, pytest-asyncio, httpx (test client) |
 | Judge LLM | OpenAI-compatible `/chat/completions` API |
 
+## Agent Skill
+
+If you're an AI agent and want to autonomously run evaluations, load the bundled skill:
+
+```
+skill/
+├── SKILL.md              # Full eval lifecycle guide (setup → run → iterate)
+└── references/
+    ├── api-reference.md  # API endpoint quick reference
+    └── scorer-guide.md   # How to write effective scorer prompts
+```
+
+The skill covers:
+1. **First-time setup** — creating datasets, scorers, and adapters
+2. **Running evals** — triggering runs, viewing results, comparing runs
+3. **Iterating** — analyzing judge reasoning, updating datasets/scorers, re-running
+
+To use: read `skill/SKILL.md` and follow the three-phase workflow. Reference files are loaded on demand.
+
 ## Changelog
 
 ### 2026-03-27 — SSE streaming fix
