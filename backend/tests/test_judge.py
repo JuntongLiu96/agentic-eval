@@ -62,3 +62,27 @@ def test_resolve_no_config():
         mock_settings.judge_api_key = ""
         with pytest.raises(ValueError, match="No judge LLM configured"):
             resolve_judge_llm({"use_target_llm": False})
+
+def test_parse_trailing_text():
+    """LLM appends extra text after the JSON object — the original bug."""
+    raw = '{"score": 85, "justification": "Good."}\nSome extra commentary the model added.'
+    r = parse_judge_response(raw, None)
+    assert r["passed"] is True
+    assert r["score"] == 85
+
+def test_parse_leading_text():
+    """LLM adds preamble before the JSON object."""
+    raw = 'Here is my evaluation:\n{"score": 70, "justification": "Decent."}'
+    r = parse_judge_response(raw, None)
+    assert r["score"] == 70
+
+def test_parse_leading_and_trailing_text():
+    raw = 'Sure, here you go:\n{"score": 50, "justification": "Mediocre."}\nHope this helps!'
+    r = parse_judge_response(raw, None)
+    assert r["score"] == 50
+    assert r["passed"] is False
+
+def test_parse_no_json_raises():
+    """No JSON at all should raise a clear error."""
+    with pytest.raises(json.JSONDecodeError):
+        parse_judge_response("I cannot provide a score right now.", None)

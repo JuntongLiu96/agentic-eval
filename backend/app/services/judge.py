@@ -88,16 +88,40 @@ Respond with ONLY the JSON object, no other text."""
         {"role": "user", "content": user_content},
     ]
 
-def parse_judge_response(response_text: str, pass_threshold: float | None) -> dict[str, Any]:
-    """Parse the judge LLM response. Extracts score + justification, computes passed."""
-    text = response_text.strip()
+def _extract_json(text: str) -> dict[str, Any]:
+    """Extract the first valid JSON object from text, tolerating trailing content.
+
+    Handles common LLM quirks:
+      1. Markdown code fences (```json ... ```)
+      2. Extra text before the opening '{' (e.g. "Here is my evaluation:\\n{...}")
+      3. Extra text after the closing '}' (the original "Extra data" crash)
+    """
+    # Strip markdown code fences
     if text.startswith("```"):
         lines = text.split("\n")
-        lines = lines[1:]
+        lines = lines[1:]  # drop opening fence line
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         text = "\n".join(lines)
-    data = json.loads(text)
+
+    # Find the first '{' — skip any preamble the LLM added
+    start = text.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON object found in judge response", text, 0)
+
+    # raw_decode parses exactly one JSON value and stops, ignoring trailing content
+    decoder = json.JSONDecoder()
+    data, _ = decoder.raw_decode(text, start)
+
+    if not isinstance(data, dict):
+        raise json.JSONDecodeError("Expected a JSON object, got " + type(data).__name__, text, start)
+
+    return data
+
+
+def parse_judge_response(response_text: str, pass_threshold: float | None) -> dict[str, Any]:
+    """Parse the judge LLM response. Extracts score + justification, computes passed."""
+    data = _extract_json(response_text.strip())
 
     score_val = data.get("score", 0)
     justification = data.get("justification", "")
