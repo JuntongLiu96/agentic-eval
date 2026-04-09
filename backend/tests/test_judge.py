@@ -86,3 +86,24 @@ def test_parse_no_json_raises():
     """No JSON at all should raise a clear error."""
     with pytest.raises(json.JSONDecodeError):
         parse_judge_response("I cannot provide a score right now.", None)
+
+
+def test_parse_control_characters_in_justification():
+    """LLM returns raw newlines/tabs inside JSON string values — must not crash.
+
+    This reproduces the 'Invalid control character at: line 1 column N' error
+    seen in production when judge LLMs return multi-line justifications with
+    literal newlines inside JSON strings (violates RFC 8259 strict mode).
+    """
+    raw = '{"score": 75, "justification": "Core Behavioral Requirement: 25/35 — The agent\ndid challenge the assumption\nbut missed key points.\tOverall decent."}'
+    r = parse_judge_response(raw, None)
+    assert r["score"] == 75
+    assert r["passed"] is True
+    assert "Core Behavioral Requirement" in r["justification"]
+
+
+def test_parse_control_characters_with_code_fences():
+    """Control characters inside code-fenced JSON should also work."""
+    raw = '```json\n{"score": 60, "justification": "Line one.\nLine two.\nLine three."}\n```'
+    r = parse_judge_response(raw, None)
+    assert r["score"] == 60

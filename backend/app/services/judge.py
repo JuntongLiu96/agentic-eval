@@ -110,7 +110,7 @@ def _extract_json(text: str) -> dict[str, Any]:
         raise json.JSONDecodeError("No JSON object found in judge response", text, 0)
 
     # raw_decode parses exactly one JSON value and stops, ignoring trailing content
-    decoder = json.JSONDecoder()
+    decoder = json.JSONDecoder(strict=False)
     data, _ = decoder.raw_decode(text, start)
 
     if not isinstance(data, dict):
