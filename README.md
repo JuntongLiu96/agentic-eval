@@ -204,8 +204,30 @@ The full config object:
 ```
 
 - `base_url` — **(required)** target agent's server URL
-- `auth_token` — **(optional)** sent as `Authorization` header on every request. Supports both `"Bearer eyJ..."` and raw `"eyJ..."` formats (auto-prefixes `Bearer ` if missing). Use this for agents behind auth (e.g., Azure AD tokens).
+- `auth_token` — **(optional but recommended)** sent as `Authorization` header on every request. Supports both `"Bearer eyJ..."` and raw `"eyJ..."` formats (auto-prefixes `Bearer ` if missing). Generate one with `agenticeval generate-token`. Protects eval endpoints from unauthorized access by other local processes.
 - `endpoints` — **(optional)** custom endpoint paths (defaults shown above)
+
+#### Authentication
+
+Protect your eval endpoints with a shared auth token so that only AgenticEval can call them:
+
+1. Generate a token:
+   ```bash
+   agenticeval generate-token
+   ```
+   Or use the **Generate Token** button in the web dashboard when creating an HTTP adapter.
+
+2. Configure your target agent's eval server to require this token via the `Authorization: Bearer <token>` header on all `/eval/*` endpoints. Return `401 Unauthorized` for missing or invalid tokens.
+
+3. Set the same token in your AgenticEval adapter config:
+   ```json
+   {
+     "base_url": "http://localhost:5000",
+     "auth_token": "your-generated-token"
+   }
+   ```
+
+> **Why?** Without auth, any local process or browser tab can hit your eval endpoints and trigger agent prompts or LLM calls using your credentials.
 
 #### Integration Prompt for Your Coding Agent
 
@@ -307,6 +329,16 @@ Example response:
 | Tools | YES — agent uses its tools normally | NO — no tools, no agent logic |
 | Input | User prompt string | Chat messages array |
 | Output | Full message list + sub-agent messages | Raw LLM response text |
+
+## Authentication (optional but recommended)
+
+All three endpoints should validate the Authorization header:
+- Read the expected token from an environment variable (e.g., EVAL_AUTH_TOKEN)
+- Check that the request has `Authorization: Bearer <token>` matching the expected token
+- Return 401 Unauthorized if the token is missing or doesn't match
+- Skip validation if EVAL_AUTH_TOKEN is not set (allows quick testing without auth)
+
+This protects your eval endpoints from unauthorized access by other local processes.
 
 ## Requirements
 - These endpoints should be added alongside the existing server routes

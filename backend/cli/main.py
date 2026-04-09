@@ -1,5 +1,6 @@
 """AgenticEval CLI entry point."""
 import json as json_mod
+import secrets
 
 import typer
 from rich.console import Console
@@ -48,6 +49,20 @@ def run_eval(
         passed = summary.get("passed", 0)
         rate = summary.get("pass_rate", 0)
         _console.print(f"  Total: {total}, Passed: {passed}, Pass Rate: {rate:.1%}")
+
+
+@app.command("generate-token")
+def generate_token():
+    """Generate a cryptographically random auth token for HTTP adapter pairing."""
+    token = secrets.token_hex(32)
+    _console.print(f"\n[bold]Generated auth token:[/bold]")
+    _console.print(f"  {token}\n")
+    _console.print("[dim]Usage:[/dim]")
+    _console.print("[dim]  1. Set this token in your target agent's eval server config[/dim]")
+    _console.print("[dim]     (e.g., EVAL_AUTH_TOKEN environment variable)[/dim]")
+    _console.print("[dim]  2. Set the same token in your AgenticEval adapter config:[/dim]")
+    _console.print(f'[dim]     agenticeval adapters create --name "my-agent" --type http \\[/dim]')
+    _console.print(f'[dim]       --config \'{{"base_url": "http://localhost:5000", "auth_token": "{token}"}}\'[/dim]\n')
 
 
 from cli.datasets import datasets_app

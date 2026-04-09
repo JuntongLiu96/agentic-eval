@@ -4,6 +4,13 @@ import { listAdapters, createAdapter, updateAdapter, deleteAdapter, healthCheckA
 import type { Adapter, AdapterCreate } from '../types'
 import styles from './AdaptersPage.module.css'
 
+/** Generate a cryptographically random 32-byte hex token. */
+function generateAuthToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default function AdaptersPage() {
   const queryClient = useQueryClient()
   const { data: adapters, isLoading } = useQuery({ queryKey: ['adapters'], queryFn: listAdapters })
@@ -26,6 +33,8 @@ export default function AdaptersPage() {
     name: '', adapter_type: 'http', config: {}, description: '', configStr: '{}',
   })
   const [editForm, setEditForm] = useState({ name: '', configStr: '', description: '' })
+  const [copiedCreate, setCopiedCreate] = useState(false)
+  const [copiedEdit, setCopiedEdit] = useState(false)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -58,6 +67,45 @@ export default function AdaptersPage() {
     setHealthResults(prev => ({ ...prev, [id]: result }))
   }
 
+  function handleGenerateToken(target: 'create' | 'edit') {
+    const token = generateAuthToken()
+    const configStr = target === 'create' ? form.configStr : editForm.configStr
+    try {
+      const config = JSON.parse(configStr)
+      config.auth_token = token
+      const newConfigStr = JSON.stringify(config, null, 2)
+      if (target === 'create') {
+        setForm({ ...form, configStr: newConfigStr })
+      } else {
+        setEditForm({ ...editForm, configStr: newConfigStr })
+      }
+    } catch {
+      alert('Invalid JSON in config — cannot inject token. Fix the JSON and try again.')
+    }
+  }
+
+  function handleCopyToken(target: 'create' | 'edit') {
+    const configStr = target === 'create' ? form.configStr : editForm.configStr
+    try {
+      const config = JSON.parse(configStr)
+      const token = config.auth_token
+      if (!token) {
+        alert('No auth_token found in config. Generate one first.')
+        return
+      }
+      navigator.clipboard.writeText(token)
+      if (target === 'create') {
+        setCopiedCreate(true)
+        setTimeout(() => setCopiedCreate(false), 2000)
+      } else {
+        setCopiedEdit(true)
+        setTimeout(() => setCopiedEdit(false), 2000)
+      }
+    } catch {
+      alert('Invalid JSON in config.')
+    }
+  }
+
   if (isLoading) return <div>Loading...</div>
 
   return (
@@ -78,6 +126,13 @@ export default function AdaptersPage() {
             <option value="stdio">Stdio</option>
           </select>
           <textarea placeholder='Config JSON, e.g. {"base_url": "http://localhost:5000"}' value={form.configStr} onChange={e => setForm({ ...form, configStr: e.target.value })} rows={3} required />
+          {form.adapter_type === 'http' && (
+            <div className={styles.tokenActions}>
+              <button type="button" className={styles.btnSmall} onClick={() => handleGenerateToken('create')}>Generate Token</button>
+              <button type="button" className={styles.btnSmall} onClick={() => handleCopyToken('create')}>{copiedCreate ? 'Copied!' : 'Copy Token'}</button>
+              <span className={styles.tokenHint}>Set the auth_token in your target agent's eval server to match this value.</span>
+            </div>
+          )}
           <input placeholder="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           <button type="submit" className={styles.btn} disabled={createMut.isPending}>Create</button>
         </form>
@@ -97,6 +152,13 @@ export default function AdaptersPage() {
                     <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" />
                     <input value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} placeholder="Description" />
                     <textarea value={editForm.configStr} onChange={e => setEditForm({ ...editForm, configStr: e.target.value })} rows={4} />
+                    {adapters?.find(a => a.id === editingId)?.adapter_type === 'http' && (
+                      <div className={styles.tokenActions}>
+                        <button type="button" className={styles.btnSmall} onClick={() => handleGenerateToken('edit')}>Generate Token</button>
+                        <button type="button" className={styles.btnSmall} onClick={() => handleCopyToken('edit')}>{copiedEdit ? 'Copied!' : 'Copy Token'}</button>
+                        <span className={styles.tokenHint}>Set the auth_token in your target agent's eval server to match this value.</span>
+                      </div>
+                    )}
                     <div className={styles.editActions}>
                       <button type="submit" className={styles.btn} disabled={updateMut.isPending}>Save</button>
                       <button type="button" className={styles.btnSmall} onClick={() => setEditingId(null)}>Cancel</button>

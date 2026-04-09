@@ -18,3 +18,5 @@
 .editForm textarea { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; }
 .editActions { display: flex; gap: 0.5rem; }
 .empty { color: #64748b; text-align: center; padding: 2rem; }
+.tokenActions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.tokenHint { color: #94a3b8; font-size: 0.8rem; font-style: italic; }

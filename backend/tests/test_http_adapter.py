@@ -142,3 +142,40 @@ async def test_http_adapter_no_auth_token():
     await adapter.connect({"base_url": "http://localhost:9999"})
     assert "authorization" not in adapter._client.headers
     await adapter.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_http_adapter_connect_warns_when_no_auth_token(caplog):
+    """Connecting without auth_token should log a warning."""
+    import logging
+    adapter = HTTPAdapter()
+    with caplog.at_level(logging.WARNING):
+        await adapter.connect({"base_url": "http://localhost:9999"})
+    assert "No auth_token configured" in caplog.text
+    assert "agenticeval generate-token" in caplog.text
+    await adapter.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_http_adapter_connect_no_warning_with_auth_token(caplog):
+    """Connecting with auth_token should NOT log a warning."""
+    import logging
+    adapter = HTTPAdapter()
+    with caplog.at_level(logging.WARNING):
+        await adapter.connect({"base_url": "http://localhost:9999", "auth_token": "my-secret"})
+    assert "No auth_token configured" not in caplog.text
+    await adapter.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_http_adapter_health_check_401_raises_valueerror():
+    """Health check should raise ValueError on 401 so the API surfaces the error message."""
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999", "auth_token": "wrong-token"})
+    mock_response = AsyncMock()
+    mock_response.status_code = 401
+    with patch.object(adapter, "_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=mock_response)
+        with pytest.raises(ValueError, match="401 Unauthorized"):
+            await adapter.health_check()
+    await adapter.disconnect()

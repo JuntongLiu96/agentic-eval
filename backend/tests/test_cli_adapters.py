@@ -105,3 +105,41 @@ class TestAdaptersCheckCmd:
         result = runner.invoke(app, ["adapters", "check", "1"])
         assert result.exit_code == 0
         assert "Connection refused" in result.stdout or "unhealthy" in result.stdout.lower()
+
+
+class TestGenerateTokenCmd:
+    def test_generate_token_outputs_64_char_hex(self):
+        result = runner.invoke(app, ["generate-token"])
+        assert result.exit_code == 0
+        # Output should contain a 64-character hex string (32 bytes)
+        lines = result.stdout.strip().split("\n")
+        # Find the token line (indented, 64 hex chars)
+        token_found = False
+        for line in lines:
+            stripped = line.strip()
+            if len(stripped) == 64 and all(c in "0123456789abcdef" for c in stripped):
+                token_found = True
+                break
+        assert token_found, f"Expected 64-char hex token in output, got:\n{result.stdout}"
+
+    def test_generate_token_shows_usage_instructions(self):
+        result = runner.invoke(app, ["generate-token"])
+        assert result.exit_code == 0
+        assert "auth_token" in result.stdout
+        assert "agenticeval adapters create" in result.stdout
+
+    def test_generate_token_produces_unique_tokens(self):
+        result1 = runner.invoke(app, ["generate-token"])
+        result2 = runner.invoke(app, ["generate-token"])
+        # Extract tokens (64-char hex lines)
+        def extract_token(output):
+            for line in output.strip().split("\n"):
+                stripped = line.strip()
+                if len(stripped) == 64 and all(c in "0123456789abcdef" for c in stripped):
+                    return stripped
+            return None
+        token1 = extract_token(result1.stdout)
+        token2 = extract_token(result2.stdout)
+        assert token1 is not None
+        assert token2 is not None
+        assert token1 != token2

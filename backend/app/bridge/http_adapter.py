@@ -47,6 +47,14 @@ class HTTPAdapter(BridgeAdapter):
                 auth_token = f"Bearer {auth_token}"
             headers["Authorization"] = auth_token
 
+        if not auth_token:
+            logger.warning(
+                "No auth_token configured for HTTP adapter at %s — "
+                "eval endpoints on the target agent are unprotected. "
+                "Run 'agenticeval generate-token' to create one.",
+                self.base_url,
+            )
+
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=float(timeout), headers=headers)
         logger.info(f"HTTPAdapter connected to {self.base_url} (timeout={timeout}s)")
 
@@ -59,6 +67,11 @@ class HTTPAdapter(BridgeAdapter):
         if not self._client: return False
         try:
             resp = await self._client.get(self.endpoints.get("health", "/eval/health"))
+            if resp.status_code == 401:
+                raise ValueError(
+                    "Target agent returned 401 Unauthorized — "
+                    "check your auth_token configuration"
+                )
             return resp.status_code == 200
         except httpx.RequestError:
             return False
