@@ -107,6 +107,7 @@ export interface EvalResult {
   id: number
   run_id: number
   test_case_id: number
+  test_case_name: string
   agent_messages: Record<string, unknown>[] | { main: Record<string, unknown>[]; sub_agents: Record<string, unknown>[] }
   score: Record<string, unknown>
   judge_reasoning: string

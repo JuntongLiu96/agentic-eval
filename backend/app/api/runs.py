@@ -11,7 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.db.database import get_db, async_session
 from app.models.adapter import Adapter
-from app.models.dataset import Dataset
+from app.models.dataset import Dataset, TestCase
 from app.models.eval_result import EvalResult
 from app.models.eval_run import EvalRun, RunStatus
 from app.models.scorer import Scorer
@@ -153,7 +153,18 @@ async def get_run_results(run_id: int, db: AsyncSession = Depends(get_db)):
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     result = await db.execute(select(EvalResult).where(EvalResult.run_id == run_id))
-    return result.scalars().all()
+    results = result.scalars().all()
+    # Look up test case names so the frontend can display them instead of raw DB IDs
+    tc_ids = [r.test_case_id for r in results]
+    tc_result = await db.execute(select(TestCase).where(TestCase.id.in_(tc_ids)))
+    tc_map = {tc.id: tc.name for tc in tc_result.scalars().all()}
+    # Build response with test_case_name attached
+    response = []
+    for r in results:
+        data = EvalResultResponse.model_validate(r)
+        data.test_case_name = tc_map.get(r.test_case_id, "")
+        response.append(data)
+    return response
 
 
 @router.get("/runs/{run_id}/export")

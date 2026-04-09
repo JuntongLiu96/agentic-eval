@@ -156,7 +156,7 @@ export default function RunDetailPage() {
                 {results.map(r => (
                   <React.Fragment key={r.id}>
                     <tr className={styles.resultRow} onClick={() => setExpandedRow(expandedRow === r.id ? null : r.id)}>
-                      <td>{r.test_case_id}</td>
+                      <td>{r.test_case_name || r.test_case_id}</td>
                       <td><PassFailIcon passed={r.passed} /></td>
                       <td>{formatScore(r.score)}</td>
                       <td>{(r.duration_ms / 1000).toFixed(1)}s</td>
