@@ -31,3 +31,12 @@
 .detail h4 { color: #a5b4fc; margin: 0.5rem 0 0.3rem; font-size: 0.85rem; }
 .detail p { color: #e2e8f0; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; line-height: 1.5; }
 .detail pre { background: #1e293b; padding: 0.5rem; border-radius: 4px; font-size: 0.75rem; color: #94a3b8; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; }
+
+.tabBar { display: flex; gap: 0; margin: 1rem 0 0.5rem; border-bottom: 2px solid #334155; }
+.tab { background: transparent; color: #94a3b8; border: none; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.85rem; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab:hover { color: #e2e8f0; }
+.tabActive { color: #818cf8; border-bottom-color: #818cf8; }
+.summaryCards { display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+.summaryCard { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.75rem 1rem; min-width: 140px; }
+.summaryCard h3 { margin: 0 0 0.3rem; color: #e2e8f0; font-size: 0.85rem; }
+.summaryCard div { color: #94a3b8; font-size: 0.8rem; }
