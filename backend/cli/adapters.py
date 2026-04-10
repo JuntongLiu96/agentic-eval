@@ -1,5 +1,6 @@
 """Adapter management CLI commands."""
 import json
+import secrets
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -56,6 +57,13 @@ def create_adapter(
 ):
     """Create a new adapter."""
     config = parse_json_arg(config_json, "--config")
+    if adapter_type == "http" and "auth_token" not in config:
+        token = secrets.token_hex(32)
+        config["auth_token"] = token
+        console.print(f"\n[bold yellow]Auto-generated auth token:[/bold yellow]")
+        console.print(f"  {token}\n")
+        console.print("[dim]Set this token in your target agent's eval server[/dim]")
+        console.print("[dim](e.g., EVAL_AUTH_TOKEN environment variable)[/dim]\n")
     payload = {"name": name, "adapter_type": adapter_type,
                "config": config, "description": description}
     a = _client().post("/api/adapters", json=payload)

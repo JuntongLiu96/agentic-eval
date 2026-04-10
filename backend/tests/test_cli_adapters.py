@@ -57,6 +57,67 @@ class TestAdaptersCreateCmd:
         assert result.exit_code == 0
         assert "my-adapter" in result.stdout
 
+    @patch("cli.adapters.ApiClient")
+    def test_create_http_auto_generates_token(self, MockClient):
+        """HTTP adapter without auth_token should auto-generate one."""
+        mock = MockClient.return_value
+        mock.post.return_value = {
+            "id": 3, "name": "auto-token", "adapter_type": "http",
+            "config": {"base_url": "http://localhost:5000"},
+            "description": "", "created_at": "2026-01-01"
+        }
+        result = runner.invoke(app, ["adapters", "create", "--name", "auto-token",
+                                     "--type", "http",
+                                     "--config", '{"base_url": "http://localhost:5000"}'])
+        assert result.exit_code == 0
+        # Token should be printed in output
+        assert "Auto-generated auth token" in result.stdout
+        # The POST payload should contain auth_token in config
+        call_args = mock.post.call_args
+        posted_config = call_args[1]["json"]["config"]
+        assert "auth_token" in posted_config
+        token = posted_config["auth_token"]
+        assert len(token) == 64
+        assert all(c in "0123456789abcdef" for c in token)
+
+    @patch("cli.adapters.ApiClient")
+    def test_create_http_preserves_existing_token(self, MockClient):
+        """HTTP adapter with auth_token already set should not overwrite it."""
+        mock = MockClient.return_value
+        mock.post.return_value = {
+            "id": 4, "name": "existing-token", "adapter_type": "http",
+            "config": {"base_url": "http://localhost:5000", "auth_token": "my-custom-token"},
+            "description": "", "created_at": "2026-01-01"
+        }
+        result = runner.invoke(app, ["adapters", "create", "--name", "existing-token",
+                                     "--type", "http",
+                                     "--config", '{"base_url": "http://localhost:5000", "auth_token": "my-custom-token"}'])
+        assert result.exit_code == 0
+        # Should NOT show auto-generated message
+        assert "Auto-generated auth token" not in result.stdout
+        # The POST payload should preserve the original token
+        call_args = mock.post.call_args
+        posted_config = call_args[1]["json"]["config"]
+        assert posted_config["auth_token"] == "my-custom-token"
+
+    @patch("cli.adapters.ApiClient")
+    def test_create_non_http_no_auto_token(self, MockClient):
+        """Non-HTTP adapter types should not get auto-generated tokens."""
+        mock = MockClient.return_value
+        mock.post.return_value = {
+            "id": 5, "name": "stdio-agent", "adapter_type": "stdio",
+            "config": {"command": "python", "args": ["agent.py"]},
+            "description": "", "created_at": "2026-01-01"
+        }
+        result = runner.invoke(app, ["adapters", "create", "--name", "stdio-agent",
+                                     "--type", "stdio",
+                                     "--config", '{"command": "python", "args": ["agent.py"]}'])
+        assert result.exit_code == 0
+        assert "Auto-generated auth token" not in result.stdout
+        call_args = mock.post.call_args
+        posted_config = call_args[1]["json"]["config"]
+        assert "auth_token" not in posted_config
+
 
 class TestAdaptersUpdateCmd:
     @patch("cli.adapters.ApiClient")
