@@ -13,14 +13,28 @@ export const compareRuns = (run1: number, run2: number) =>
   apiGet<RunComparison>('/runs/compare', { run1: String(run1), run2: String(run2) })
 export const exportRunUrl = (id: number) => apiDownloadUrl(`/runs/${id}/export`)
 
-export function streamRun(runId: number, onEvent: (event: Record<string, unknown>) => void, onDone: () => void) {
+export function streamRun(
+  runId: number,
+  onEvent: (event: Record<string, unknown>) => void,
+  onDone: () => void,
+  onConnectionFailed: () => void,
+) {
   const source = new EventSource(`/api/runs/${runId}/stream`)
+  let connected = false
+  source.onopen = () => { connected = true }
   source.addEventListener('run_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('case_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('round_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('case_completed', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('round_completed', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('run_completed', (e) => { onEvent(JSON.parse((e as MessageEvent).data)); source.close(); onDone() })
-  source.addEventListener('error', () => { source.close(); onDone() })
+  source.addEventListener('error', () => {
+    source.close()
+    if (!connected) {
+      onConnectionFailed()
+    } else {
+      onDone()
+    }
+  })
   return () => source.close()
 }

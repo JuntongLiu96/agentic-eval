@@ -67,11 +67,9 @@ export default function RunDetailPage() {
     setIsRunning(true)
     setProgress([])
     try {
-      let receivedEvents = false
-      const cleanup = streamRun(
+      streamRun(
         runId,
         (event) => {
-          receivedEvents = true
           const type = (event as any).type
           const round = (event as any).round
           if (type === 'round_started' && round > 0) {
@@ -80,25 +78,27 @@ export default function RunDetailPage() {
             const name = (event as any).case_name || ''
             const passed = (event as any).passed ? '✓' : '✗'
             setProgress(prev => [...prev, `R${round} ${name}: ${passed}`])
+          } else if (type === 'case_completed' && round === 0) {
+            const name = (event as any).case_name || ''
+            setProgress(prev => [...prev, `Agent run: ${name}`])
           }
         },
         () => {
+          // SSE stream completed normally
+          setIsRunning(false)
+          refetchRun()
+          queryClient.invalidateQueries({ queryKey: ['results', runId] })
+          queryClient.invalidateQueries({ queryKey: ['summary', runId] })
+        },
+        async () => {
+          // SSE connection failed — fall back to synchronous start
+          try { await startRun(runId) } catch { /* run may already be started */ }
           setIsRunning(false)
           refetchRun()
           queryClient.invalidateQueries({ queryKey: ['results', runId] })
           queryClient.invalidateQueries({ queryKey: ['summary', runId] })
         },
       )
-      setTimeout(async () => {
-        if (!receivedEvents) {
-          cleanup()
-          try { await startRun(runId) } catch { /* run may already be started */ }
-          setIsRunning(false)
-          refetchRun()
-          queryClient.invalidateQueries({ queryKey: ['results', runId] })
-          queryClient.invalidateQueries({ queryKey: ['summary', runId] })
-        }
-      }, 5000)
     } catch {
       try { await startRun(runId) } catch { /* ignore */ }
       setIsRunning(false)
