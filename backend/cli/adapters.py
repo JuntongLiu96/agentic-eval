@@ -2,6 +2,7 @@
 import json
 import secrets
 import typer
+from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from cli.api_client import ApiClient, state, parse_json_arg
@@ -12,6 +13,24 @@ console = Console()
 
 def _client() -> ApiClient:
     return ApiClient(base_url=state["base_url"])
+
+
+def _load_config_file(file_path: str) -> dict:
+    """Load a JSON config file and return its contents."""
+    path = Path(file_path)
+    if not path.exists():
+        typer.echo(f"Error: File not found: {file_path}", err=True)
+        raise SystemExit(1)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        typer.echo(f"Error: Invalid JSON in {file_path}: {e}", err=True)
+        raise SystemExit(1)
+    if not isinstance(data, dict):
+        typer.echo(f"Error: Expected a JSON object in {file_path}, got {type(data).__name__}", err=True)
+        raise SystemExit(1)
+    return data
 
 
 @adapters_app.command("list")
@@ -52,11 +71,20 @@ def create_adapter(
     name: str = typer.Option(..., "--name", "-n", help="Adapter name"),
     adapter_type: str = typer.Option(..., "--type", "-t",
                                       help="Adapter type: http, openclaw, python, stdio"),
-    config_json: str = typer.Option(..., "--config", "-c", help="Config as JSON string"),
+    config_json: str = typer.Option(None, "--config", "-c", help="Config as JSON string"),
+    config_file: str = typer.Option(None, "--config-file", help="Config from a JSON file"),
     description: str = typer.Option("", "--description", "-d", help="Description"),
 ):
-    """Create a new adapter."""
-    config = parse_json_arg(config_json, "--config")
+    """Create a new adapter. Use --config for inline JSON or --config-file to load from a file."""
+    # Resolve config: --config takes precedence over --config-file
+    if config_json is not None:
+        config = parse_json_arg(config_json, "--config")
+    elif config_file is not None:
+        config = _load_config_file(config_file)
+    else:
+        typer.echo("Error: Either --config or --config-file is required.", err=True)
+        raise SystemExit(1)
+
     if adapter_type == "http" and "auth_token" not in config:
         token = secrets.token_hex(32)
         config["auth_token"] = token
@@ -76,16 +104,20 @@ def update_adapter(
     name: str = typer.Option(None, "--name", "-n", help="New adapter name"),
     adapter_type: str = typer.Option(None, "--type", "-t", help="New type: http, openclaw, python, stdio"),
     config_json: str = typer.Option(None, "--config", "-c", help="New config as JSON string"),
+    config_file: str = typer.Option(None, "--config-file", help="New config from a JSON file"),
     description: str = typer.Option(None, "--description", "-d", help="New description"),
 ):
-    """Update an existing adapter's config."""
+    """Update an existing adapter's config. Use --config for inline JSON or --config-file to load from a file."""
     payload: dict = {}
     if name is not None:
         payload["name"] = name
     if adapter_type is not None:
         payload["adapter_type"] = adapter_type
+    # --config takes precedence over --config-file
     if config_json is not None:
         payload["config"] = parse_json_arg(config_json, "--config")
+    elif config_file is not None:
+        payload["config"] = _load_config_file(config_file)
     if description is not None:
         payload["description"] = description
     if not payload:
