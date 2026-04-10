@@ -144,3 +144,39 @@ async def test_start_run_with_mock(client):
     results = results_resp.json()
     assert len(results) == 1
     assert results[0]["passed"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_run_with_multi_round(client):
+    """Creating a run with num_rounds and round_mode should persist them."""
+    ds = await client.post("/api/datasets", json={"name": "DS"})
+    scorer = await client.post("/api/scorers", json={"name": "S", "eval_prompt": "test"})
+    adapter = await client.post("/api/adapters", json={
+        "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},
+    })
+    run = await client.post("/api/runs", json={
+        "dataset_id": ds.json()["id"], "scorer_id": scorer.json()["id"],
+        "adapter_id": adapter.json()["id"], "num_rounds": 3, "round_mode": "scorer",
+    })
+    assert run.status_code == 201
+    data = run.json()
+    assert data["num_rounds"] == 3
+    assert data["round_mode"] == "scorer"
+
+
+@pytest.mark.asyncio
+async def test_create_run_defaults_single_round(client):
+    """Creating a run without num_rounds should default to 1 round, agent mode."""
+    ds = await client.post("/api/datasets", json={"name": "DS"})
+    scorer = await client.post("/api/scorers", json={"name": "S", "eval_prompt": "test"})
+    adapter = await client.post("/api/adapters", json={
+        "name": "A", "adapter_type": "http", "config": {"base_url": "http://fake:9999"},
+    })
+    run = await client.post("/api/runs", json={
+        "dataset_id": ds.json()["id"], "scorer_id": scorer.json()["id"],
+        "adapter_id": adapter.json()["id"],
+    })
+    assert run.status_code == 201
+    data = run.json()
+    assert data["num_rounds"] == 1
+    assert data["round_mode"] == "agent"

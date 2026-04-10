@@ -9,6 +9,8 @@ class EvalRunCreate(BaseModel):
     scorer_id: int
     adapter_id: int
     judge_config: dict[str, Any] = {"use_target_llm": True}
+    num_rounds: int = 1
+    round_mode: str = "agent"
 
 class EvalRunResponse(BaseModel):
     id: int
@@ -17,6 +19,8 @@ class EvalRunResponse(BaseModel):
     scorer_id: int
     adapter_id: int
     judge_config: dict[str, Any]
+    num_rounds: int
+    round_mode: str
     status: str
     started_at: datetime | None
     finished_at: datetime | None

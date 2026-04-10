@@ -46,6 +46,8 @@ async def create_run(payload: EvalRunCreate, db: AsyncSession = Depends(get_db))
         name=payload.name, dataset_id=payload.dataset_id,
         scorer_id=payload.scorer_id, adapter_id=payload.adapter_id,
         judge_config=json.dumps(payload.judge_config),
+        num_rounds=payload.num_rounds,
+        round_mode=payload.round_mode,
     )
     db.add(run)
     await db.commit()
