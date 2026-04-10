@@ -55,10 +55,11 @@ Adapter types:
 | Method | Endpoint | Body / Params | Returns |
 |--------|----------|---------------|---------|
 | `GET` | `/api/runs` | — | `[{id, name, status, dataset_id, scorer_id, adapter_id, created_at}]` |
-| `POST` | `/api/runs` | `{dataset_id, scorer_id, adapter_id, name?}` | `{id, name, status: "pending"}` |
+| `POST` | `/api/runs` | `{dataset_id, scorer_id, adapter_id, name?, num_rounds?, round_mode?}` | `{id, name, status: "pending", num_rounds, round_mode}` |
 | `GET` | `/api/runs/{id}` | — | `{id, status, started_at, finished_at, ...}` |
 | `POST` | `/api/runs/{id}/start` | — | Synchronous. Returns when complete. `{id, status: "completed"}` |
-| `GET` | `/api/runs/{id}/results` | — | `[{testcase_id, score, passed, judge_reasoning, duration_seconds}]` |
+| `GET` | `/api/runs/{id}/results` | `?round=N` (optional) | `[{testcase_id, round_number, score, passed, judge_reasoning, duration_seconds}]` |
+| `GET` | `/api/runs/{id}/summary` | — | `{num_rounds, round_mode, round_summaries: [...], averaged: {...}}` |
 | `GET` | `/api/runs/compare` | `?run1_id=X&run2_id=Y` | Per-testcase comparison with deltas |
 | `GET` | `/api/runs/{id}/export` | — | CSV file |
 | `DELETE` | `/api/runs/{id}` | — | `204` |
