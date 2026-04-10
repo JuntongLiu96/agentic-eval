@@ -7,22 +7,46 @@ A general-purpose evaluation system for any agentic AI system, using LLM-as-a-Ju
 ### Prerequisites
 
 - Python 3.12+
+- [uv](https://docs.astral.sh/uv/) (fast Python package manager)
 - Node.js 18+ (for the web dashboard)
 
-### 1. Start the Backend
+### Windows — One-Key Setup
+
+Run the setup script from the project root. It installs `uv` (if missing), creates a virtual environment, installs all dependencies, and sets up your `.env` file:
+
+```cmd
+setup.bat
+```
+
+Then start the backend and frontend:
+
+```cmd
+cd backend
+uv run uvicorn app.main:app --reload --port 9100
+
+:: In another terminal:
+cd frontend
+npm run dev
+```
+
+### macOS / Linux
 
 ```bash
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Backend
 cd backend
+uv venv
+uv pip install -e ".[dev]"
 cp .env.example .env          # configure your judge LLM (see Environment Variables below)
-pip install -e ".[dev]"
-uvicorn app.main:app --reload --port 9100
+uv run uvicorn app.main:app --reload --port 9100
 ```
 
 The API server starts at **http://localhost:9100**. API docs are at http://localhost:9100/docs.
 
-### 2. Start the Frontend
-
 ```bash
+# Frontend (in another terminal)
 cd frontend
 npm install
 npm run dev
@@ -30,11 +54,15 @@ npm run dev
 
 The web dashboard starts at **http://localhost:9101** and proxies API requests to the backend.
 
-### 3. Use the CLI (optional)
+### Use the CLI
 
 ```bash
 cd backend
-pip install -e .
+uv run agenticeval --help
+
+# Or activate the venv first, then use directly:
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 agenticeval --help
 ```
 
@@ -724,10 +752,17 @@ The system computes `passed = score >= pass_threshold` (default threshold: 60).
 ### Via CLI
 
 ```bash
+# From a JSON file (recommended — avoids shell quoting issues)
+agenticeval scorers create --file scorer.json
+
+# Or inline (simple prompts only)
 agenticeval scorers create \
   --name "answer-correctness" \
-  --eval-prompt "Compare the agent's answer to the expected answer. Score 0-100: 100 if semantically correct, 0 if wrong. Return {\"score\": <0-100>, \"justification\": \"<explain>\"}." \
+  --eval-prompt "Compare the agent's answer to the expected answer. Score 0-100." \
   --threshold 60
+
+# File + CLI override (file provides base, CLI overrides specific fields)
+agenticeval scorers create --file scorer.json --threshold 70
 ```
 
 ### Using Scorer Templates
@@ -839,8 +874,8 @@ AgenticEval/
 ```bash
 # Backend (105 tests)
 cd backend
-pip install -e ".[dev]"
-pytest -v
+uv pip install -e ".[dev]"
+uv run pytest -v
 
 # Frontend (TypeScript check)
 cd frontend
