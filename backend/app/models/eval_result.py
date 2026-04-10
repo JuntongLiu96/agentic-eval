@@ -7,6 +7,7 @@ class EvalResult(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(Integer, ForeignKey("eval_runs.id"), nullable=False)
     test_case_id: Mapped[int] = mapped_column(Integer, ForeignKey("test_cases.id"), nullable=False)
+    round_number: Mapped[int] = mapped_column(Integer, default=1)
     agent_messages: Mapped[str] = mapped_column(Text, default="[]")
     score: Mapped[str] = mapped_column(Text, default="{}")
     judge_reasoning: Mapped[str] = mapped_column(Text, default="")

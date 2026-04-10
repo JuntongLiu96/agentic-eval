@@ -749,6 +749,12 @@ Copy the template prompt, paste it into your coding agent (Claude, Copilot, etc.
 # One-shot: create and immediately run
 agenticeval run --dataset 1 --scorer 1 --adapter 1 --name "my-eval"
 
+# Multi-round: test agent consistency (re-run agent + judge 3 times)
+agenticeval run --dataset 1 --scorer 1 --adapter 1 --name "consistency-test" --num-rounds 3
+
+# Multi-round scorer mode: test judge consistency (run agent once, re-judge 3 times)
+agenticeval run --dataset 1 --scorer 1 --adapter 1 --name "judge-test" --num-rounds 3 --round-mode scorer
+
 # Or step by step
 agenticeval runs create --dataset 1 --scorer 1 --adapter 1 --name "my-eval"
 agenticeval runs start 1

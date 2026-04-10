@@ -88,6 +88,12 @@ agenticeval adapters create --name "cli-agent" --type stdio --config '{"command"
 # One-step create + start (recommended)
 agenticeval run --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "run-v1"
 
+# Multi-round: test agent consistency across multiple runs
+agenticeval run --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "consistency-v1" --num-rounds 3
+
+# Multi-round scorer mode: test judge/scorer consistency (run agent once, re-judge N times)
+agenticeval run --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "scorer-test" --num-rounds 3 --round-mode scorer
+
 # Alternative: separate create + start
 agenticeval runs create --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "run-v1"
 agenticeval runs start {run_id}

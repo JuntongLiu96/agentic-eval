@@ -31,12 +31,15 @@ def run_eval(
     name: str = typer.Option("", "--name", "-n", help="Optional run name"),
     judge_config_json: str = typer.Option("{}", "--judge-config",
                                           help="Judge config as JSON string"),
+    num_rounds: int = typer.Option(1, "--num-rounds", "-r", help="Number of rounds (default: 1)"),
+    round_mode: str = typer.Option("agent", "--round-mode", help="Round mode: agent or scorer"),
 ):
     """Create and immediately start an eval run (shortcut)."""
     client = ApiClient(base_url=state["base_url"])
     judge_config = parse_json_arg(judge_config_json, "--judge-config")
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
-               "name": name, "judge_config": judge_config}
+               "name": name, "judge_config": judge_config,
+               "num_rounds": num_rounds, "round_mode": round_mode}
     r = client.post("/api/runs", json=payload)
     run_id = r["id"]
     _console.print(f"[yellow]Created run #{run_id}. Starting...[/yellow]")

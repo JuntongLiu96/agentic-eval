@@ -63,13 +63,17 @@ def create_run(
     name: str = typer.Option("", "--name", "-n", help="Optional run name"),
     judge_config_json: str = typer.Option("{}", "--judge-config",
                                           help="Judge config as JSON string"),
+    num_rounds: int = typer.Option(1, "--num-rounds", "-r", help="Number of rounds (default: 1)"),
+    round_mode: str = typer.Option("agent", "--round-mode", help="Round mode: agent or scorer"),
 ):
     """Create a new eval run (does not start it)."""
     judge_config = parse_json_arg(judge_config_json, "--judge-config")
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
-               "name": name, "judge_config": judge_config}
+               "name": name, "judge_config": judge_config,
+               "num_rounds": num_rounds, "round_mode": round_mode}
     r = _client().post("/api/runs", json=payload)
-    console.print(f"[green]Created run #{r['id']}: {r.get('name', '')} (status: {r.get('status', 'pending')})[/green]")
+    rounds_info = f", {r.get('num_rounds', 1)} rounds ({r.get('round_mode', 'agent')})" if r.get('num_rounds', 1) > 1 else ""
+    console.print(f"[green]Created run #{r['id']}: {r.get('name', '')} (status: {r.get('status', 'pending')}{rounds_info})[/green]")
 
 
 @runs_app.command("delete")
@@ -102,9 +106,15 @@ def start_run(run_id: int = typer.Argument(..., help="Run ID to start")):
 
 
 @runs_app.command("results")
-def show_results(run_id: int = typer.Argument(..., help="Run ID")):
+def show_results(
+    run_id: int = typer.Argument(..., help="Run ID"),
+    round_num: int = typer.Option(None, "--round", "-R", help="Filter by round number"),
+):
     """Show detailed results for a run."""
-    data = _client().get(f"/api/runs/{run_id}/results")
+    params = {}
+    if round_num is not None:
+        params["round"] = round_num
+    data = _client().get(f"/api/runs/{run_id}/results", params=params)
     if not data:
         console.print("[yellow]No results found.[/yellow]")
         return

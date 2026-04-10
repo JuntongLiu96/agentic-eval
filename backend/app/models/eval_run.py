@@ -18,6 +18,8 @@ class EvalRun(Base):
     scorer_id: Mapped[int] = mapped_column(Integer, ForeignKey("scorers.id"), nullable=False)
     adapter_id: Mapped[int] = mapped_column(Integer, ForeignKey("adapters.id"), nullable=False)
     judge_config: Mapped[str] = mapped_column(Text, default='{"use_target_llm": true}')
+    num_rounds: Mapped[int] = mapped_column(Integer, default=1)
+    round_mode: Mapped[str] = mapped_column(String(10), default="agent")
     status: Mapped[RunStatus] = mapped_column(Enum(RunStatus), default=RunStatus.pending)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

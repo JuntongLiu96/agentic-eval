@@ -17,7 +17,7 @@ from app.models.eval_run import EvalRun, RunStatus
 from app.models.scorer import Scorer
 from app.schemas.eval_result import EvalResultResponse
 from app.schemas.eval_run import EvalRunCreate, EvalRunResponse
-from app.services.aggregator import aggregate_run_results
+from app.services.aggregator import aggregate_run_results, multi_round_summary
 from app.services.orchestrator import run_eval
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -46,6 +46,8 @@ async def create_run(payload: EvalRunCreate, db: AsyncSession = Depends(get_db))
         name=payload.name, dataset_id=payload.dataset_id,
         scorer_id=payload.scorer_id, adapter_id=payload.adapter_id,
         judge_config=json.dumps(payload.judge_config),
+        num_rounds=payload.num_rounds,
+        round_mode=payload.round_mode,
     )
     db.add(run)
     await db.commit()
@@ -147,17 +149,37 @@ async def stream_run(run_id: int):
     return EventSourceResponse(event_generator())
 
 
-@router.get("/runs/{run_id}/results", response_model=list[EvalResultResponse])
-async def get_run_results(run_id: int, db: AsyncSession = Depends(get_db)):
+@router.get("/runs/{run_id}/summary")
+async def get_run_summary(run_id: int, db: AsyncSession = Depends(get_db)):
     run = await db.get(EvalRun, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    result = await db.execute(select(EvalResult).where(EvalResult.run_id == run_id))
+    if run.num_rounds <= 1:
+        summary = await aggregate_run_results(run_id, db)
+        return {"num_rounds": 1, "round_mode": run.round_mode,
+                "round_summaries": [{"round": 1, **summary}],
+                "averaged": {"round": 0, **summary}}
+    scorer = await db.get(Scorer, run.scorer_id)
+    pass_threshold = scorer.pass_threshold if scorer and scorer.pass_threshold is not None else 60.0
+    return await multi_round_summary(run_id, run.num_rounds, run.round_mode, pass_threshold, db)
+
+
+@router.get("/runs/{run_id}/results", response_model=list[EvalResultResponse])
+async def get_run_results(run_id: int, round: int | None = None, db: AsyncSession = Depends(get_db)):
+    run = await db.get(EvalRun, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    query = select(EvalResult).where(EvalResult.run_id == run_id)
+    if round is not None:
+        query = query.where(EvalResult.round_number == round)
+    result = await db.execute(query)
     results = result.scalars().all()
     # Look up test case names so the frontend can display them instead of raw DB IDs
-    tc_ids = [r.test_case_id for r in results]
-    tc_result = await db.execute(select(TestCase).where(TestCase.id.in_(tc_ids)))
-    tc_map = {tc.id: tc.name for tc in tc_result.scalars().all()}
+    tc_ids = list({r.test_case_id for r in results})
+    tc_map: dict[int, str] = {}
+    if tc_ids:
+        tc_result = await db.execute(select(TestCase).where(TestCase.id.in_(tc_ids)))
+        tc_map = {tc.id: tc.name for tc in tc_result.scalars().all()}
     # Build response with test_case_name attached
     response = []
     for r in results:
@@ -176,9 +198,9 @@ async def export_run(run_id: int, db: AsyncSession = Depends(get_db)):
     results = result.scalars().all()
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["test_case_id", "passed", "score", "judge_reasoning", "duration_ms"])
+    writer.writerow(["test_case_id", "round_number", "passed", "score", "judge_reasoning", "duration_ms"])
     for r in results:
-        writer.writerow([r.test_case_id, r.passed, r.score, r.judge_reasoning, r.duration_ms])
+        writer.writerow([r.test_case_id, r.round_number, r.passed, r.score, r.judge_reasoning, r.duration_ms])
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]), media_type="text/csv",

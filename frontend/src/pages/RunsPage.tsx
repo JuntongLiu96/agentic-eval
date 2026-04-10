@@ -34,7 +34,7 @@ export default function RunsPage() {
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<EvalRunCreate>({
-    name: '', dataset_id: 0, scorer_id: 0, adapter_id: 0,
+    name: '', dataset_id: 0, scorer_id: 0, adapter_id: 0, num_rounds: 1, round_mode: 'agent',
   })
 
   function handleSubmit(e: React.FormEvent) {
@@ -71,6 +71,15 @@ export default function RunsPage() {
             <option value={0} disabled>Select Adapter</option>
             {adapters?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
+          <input type="number" min={1} max={20} placeholder="Rounds" value={form.num_rounds ?? 1}
+            onChange={e => setForm({ ...form, num_rounds: Number(e.target.value) })}
+            style={{ width: 70 }} title="Number of rounds" />
+          {(form.num_rounds ?? 1) > 1 && (
+            <select value={form.round_mode ?? 'agent'} onChange={e => setForm({ ...form, round_mode: e.target.value })}>
+              <option value="agent">Agent (re-run full pipeline)</option>
+              <option value="scorer">Scorer (re-judge only)</option>
+            </select>
+          )}
           <button type="submit" className={styles.btn} disabled={createMut.isPending || form.dataset_id === 0 || form.scorer_id === 0 || form.adapter_id === 0}>Create Run</button>
         </form>
       )}

@@ -88,6 +88,8 @@ export interface EvalRun {
   scorer_id: number
   adapter_id: number
   judge_config: Record<string, unknown>
+  num_rounds: number
+  round_mode: string
   status: string
   started_at: string | null
   finished_at: string | null
@@ -100,6 +102,8 @@ export interface EvalRunCreate {
   scorer_id: number
   adapter_id: number
   judge_config?: Record<string, unknown>
+  num_rounds?: number
+  round_mode?: string
 }
 
 // --- Eval Result ---
@@ -108,6 +112,7 @@ export interface EvalResult {
   run_id: number
   test_case_id: number
   test_case_name: string
+  round_number: number
   agent_messages: Record<string, unknown>[] | { main: Record<string, unknown>[]; sub_agents: Record<string, unknown>[] }
   score: Record<string, unknown>
   judge_reasoning: string
@@ -138,4 +143,22 @@ export interface TestCaseComparison {
   run1_score: number | null
   run2_score: number | null
   changed: boolean
+}
+
+// --- Multi-Round Summary ---
+export interface RoundSummary {
+  round: number
+  total: number
+  passed: number
+  pass_rate: number
+  avg_score?: number
+  min_score?: number
+  max_score?: number
+}
+
+export interface MultiRoundSummary {
+  num_rounds: number
+  round_mode: string
+  round_summaries: RoundSummary[]
+  averaged: RoundSummary
 }
