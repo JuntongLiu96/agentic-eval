@@ -13,7 +13,7 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 async def seed_scorer_templates(db: AsyncSession) -> None:
     """Load built-in scorer templates from YAML files. Updates existing templates by name."""
     for yaml_file in sorted(TEMPLATES_DIR.glob("*.yaml")):
-        with open(yaml_file) as f:
+        with open(yaml_file, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         # Check if template with this name already exists

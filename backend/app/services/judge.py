@@ -6,14 +6,14 @@ from app.config import settings
 
 SYSTEM_EVAL_PROMPT = """You are an expert evaluation judge. Your job is to evaluate an AI agent's output against expected results using the provided scoring criteria.
 
-You MUST respond with valid JSON in this exact format:
+Follow the output format specified in the scoring criteria exactly. If the scoring criteria specify a particular JSON format, use that format.
+
+If no specific format is given, respond with this default JSON format:
 {
   "score": <number>,
   "justification": "<detailed explanation of why you gave this score, referencing the scoring criteria>"
 }
 
-The score must be a numeric value within the range specified by the scoring criteria.
-The justification must explain your reasoning step by step, referencing specific parts of the scoring criteria and the agent's output.
 Do not include any text outside the JSON object.
 """
 
@@ -120,9 +120,23 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 
 def parse_judge_response(response_text: str, pass_threshold: float | None) -> dict[str, Any]:
-    """Parse the judge LLM response. Extracts score + justification, computes passed."""
+    """Parse the judge LLM response. Extracts score + justification, computes passed.
+
+    Supports two formats:
+    1. Standard: {"score": N, "justification": "..."}
+    2. Boolean rubric: {"items": {...}, "dimensions": {...}, "overall_pass_rate": 0.77, "verdict": "pass"}
+    """
     data = _extract_json(response_text.strip())
 
+    # Detect boolean rubric format (has "items" and "overall_pass_rate")
+    if "items" in data and "overall_pass_rate" in data:
+        score_val = data["overall_pass_rate"]
+        verdict = data.get("verdict", "")
+        passed = verdict == "pass"
+        justification = json.dumps(data, indent=2)
+        return {"score": score_val, "passed": passed, "justification": justification}
+
+    # Standard format
     score_val = data.get("score", 0)
     justification = data.get("justification", "")
     threshold = pass_threshold if pass_threshold is not None else 60.0
