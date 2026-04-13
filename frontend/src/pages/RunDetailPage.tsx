@@ -7,6 +7,8 @@ import { listScorers } from '../api/scorers'
 import { listAdapters } from '../api/adapters'
 import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
+import BooleanRubricView from '../components/BooleanRubricView'
+import { parseBooleanRubric } from '../utils/booleanRubric'
 import type { EvalResult, TestCaseAveraged } from '../types'
 import styles from './RunDetailPage.module.css'
 
@@ -238,14 +240,28 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
                 <td><PassFailIcon passed={r.passed} /></td>
                 <td>{formatScore(r.score)}</td>
                 <td>{(r.duration_ms / 1000).toFixed(1)}s</td>
-                <td className={styles.reasoning}>{r.judge_reasoning}</td>
+                <td className={styles.reasoning}>
+                  {(() => {
+                    const rubric = parseBooleanRubric(r.judge_reasoning)
+                    if (rubric) {
+                      return `${rubric.verdict.toUpperCase().replace(/_/g, ' ')} \u2014 ${(rubric.overall_pass_rate * 100).toFixed(0)}%`
+                    }
+                    return r.judge_reasoning
+                  })()}
+                </td>
               </tr>
               {expandedRow === r.id && (
                 <tr className={styles.expandedRow}>
                   <td colSpan={colSpan}>
                     <div className={styles.detail}>
-                      <h4>Justification</h4>
-                      <p>{r.judge_reasoning}</p>
+                      <h4>Judge Reasoning</h4>
+                      {(() => {
+                        const rubric = parseBooleanRubric(r.judge_reasoning)
+                        if (rubric) {
+                          return <BooleanRubricView rubric={rubric} />
+                        }
+                        return <p>{r.judge_reasoning}</p>
+                      })()}
                       <h4>Score</h4>
                       <pre>{JSON.stringify(r.score, null, 2)}</pre>
                       {Array.isArray(r.agent_messages) ? (

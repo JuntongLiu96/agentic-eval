@@ -173,3 +173,23 @@ export interface MultiRoundSummary {
   averaged: RoundSummary
   tc_averaged: TestCaseAveraged[]
 }
+
+// --- Boolean Rubric ---
+export interface RubricItem {
+  pass: 0 | 1
+  reason: string
+}
+
+export interface RubricDimension {
+  passed: number
+  total: number
+  rate: number
+}
+
+export interface BooleanRubricResult {
+  items: Record<string, RubricItem>
+  dimensions: Record<string, RubricDimension>
+  overall_pass_rate: number
+  critical_failures: string[]
+  verdict: "pass" | "needs_improvement" | "fail"
+}
