@@ -156,9 +156,20 @@ export interface RoundSummary {
   max_score?: number
 }
 
+export interface TestCaseAveraged {
+  test_case_id: number
+  test_case_name: string
+  avg_score: number | null
+  passed: boolean
+  avg_duration_ms: number
+  rounds_passed: number
+  total_rounds: number
+}
+
 export interface MultiRoundSummary {
   num_rounds: number
   round_mode: string
   round_summaries: RoundSummary[]
   averaged: RoundSummary
+  tc_averaged: TestCaseAveraged[]
 }

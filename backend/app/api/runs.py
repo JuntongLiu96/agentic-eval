@@ -17,7 +17,7 @@ from app.models.eval_run import EvalRun, RunStatus
 from app.models.scorer import Scorer
 from app.schemas.eval_result import EvalResultResponse
 from app.schemas.eval_run import EvalRunCreate, EvalRunResponse
-from app.services.aggregator import aggregate_run_results, multi_round_summary
+from app.services.aggregator import aggregate_run_results, multi_round_summary, multi_round_per_tc_summary
 from app.services.orchestrator import run_eval
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -158,10 +158,14 @@ async def get_run_summary(run_id: int, db: AsyncSession = Depends(get_db)):
         summary = await aggregate_run_results(run_id, db)
         return {"num_rounds": 1, "round_mode": run.round_mode,
                 "round_summaries": [{"round": 1, **summary}],
-                "averaged": {"round": 0, **summary}}
+                "averaged": {"round": 0, **summary},
+                "tc_averaged": []}
     scorer = await db.get(Scorer, run.scorer_id)
     pass_threshold = scorer.pass_threshold if scorer and scorer.pass_threshold is not None else 60.0
-    return await multi_round_summary(run_id, run.num_rounds, run.round_mode, pass_threshold, db)
+    result = await multi_round_summary(run_id, run.num_rounds, run.round_mode, pass_threshold, db)
+    tc_averaged = await multi_round_per_tc_summary(run_id, run.num_rounds, pass_threshold, db)
+    result["tc_averaged"] = tc_averaged
+    return result
 
 
 @router.get("/runs/{run_id}/results", response_model=list[EvalResultResponse])
