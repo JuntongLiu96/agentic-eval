@@ -3,6 +3,7 @@ from typing import Any
 from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.dataset import TestCase
 from app.models.eval_result import EvalResult
 
 
@@ -115,3 +116,51 @@ async def multi_round_summary(
         "round_summaries": round_summaries,
         "averaged": averaged,
     }
+
+
+async def multi_round_per_tc_summary(
+    run_id: int, num_rounds: int, pass_threshold: float, db: AsyncSession,
+) -> list[dict[str, Any]]:
+    """Return one aggregated row per test case, averaged across all rounds.
+
+    Pass logic: majority vote — passed in more than half the rounds.
+    Tie (e.g. 5:5) counts as NOT passed.
+    """
+    result = await db.execute(select(EvalResult).where(EvalResult.run_id == run_id))
+    all_results = result.scalars().all()
+
+    # Look up test case names
+    tc_ids = list({r.test_case_id for r in all_results})
+    tc_name_map: dict[int, str] = {}
+    if tc_ids:
+        tc_result = await db.execute(select(TestCase).where(TestCase.id.in_(tc_ids)))
+        tc_name_map = {tc.id: tc.name for tc in tc_result.scalars().all()}
+
+    # Group results by test_case_id
+    tc_groups: dict[int, list[EvalResult]] = defaultdict(list)
+    for r in all_results:
+        tc_groups[r.test_case_id].append(r)
+
+    rows: list[dict[str, Any]] = []
+    for tc_id, tc_results in tc_groups.items():
+        total_rounds = len(tc_results)
+        rounds_passed = sum(1 for r in tc_results if r.passed)
+        # Majority vote: strictly more than half → pass; tie → not pass
+        passed = rounds_passed > total_rounds / 2
+
+        scores = [s for r in tc_results if (s := _extract_score(r.score)) is not None]
+        avg_score = round(sum(scores) / len(scores), 2) if scores else None
+
+        avg_duration = round(sum(r.duration_ms for r in tc_results) / total_rounds)
+
+        rows.append({
+            "test_case_id": tc_id,
+            "test_case_name": tc_name_map.get(tc_id, ""),
+            "avg_score": avg_score,
+            "passed": passed,
+            "avg_duration_ms": avg_duration,
+            "rounds_passed": rounds_passed,
+            "total_rounds": total_rounds,
+        })
+
+    return rows

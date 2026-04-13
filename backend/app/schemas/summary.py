@@ -12,8 +12,19 @@ class RoundSummary(BaseModel):
     max_score: float | None = None
 
 
+class TestCaseAveraged(BaseModel):
+    test_case_id: int
+    test_case_name: str = ""
+    avg_score: float | None = None
+    passed: bool
+    avg_duration_ms: int
+    rounds_passed: int
+    total_rounds: int
+
+
 class MultiRoundSummary(BaseModel):
     num_rounds: int
     round_mode: str
     round_summaries: list[RoundSummary]
     averaged: RoundSummary
+    tc_averaged: list[TestCaseAveraged] = []

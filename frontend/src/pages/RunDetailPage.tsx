@@ -7,7 +7,7 @@ import { listScorers } from '../api/scorers'
 import { listAdapters } from '../api/adapters'
 import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
-import type { EvalResult } from '../types'
+import type { EvalResult, TestCaseAveraged } from '../types'
 import styles from './RunDetailPage.module.css'
 
 function formatScore(score: any): string {
@@ -173,18 +173,19 @@ export default function RunDetailPage() {
             <div>{summary.averaged.passed}/{summary.averaged.total} passed ({summary.averaged.pass_rate}%)</div>
             {summary.averaged.avg_score !== undefined && <div>Avg score: {summary.averaged.avg_score}</div>}
           </div>
-          {summary.round_summaries.map(rs => (
-            <div key={rs.round} className={styles.summaryCard}>
-              <h3>Round {rs.round}</h3>
-              <div>{rs.passed}/{rs.total} passed ({rs.pass_rate}%)</div>
-              {rs.avg_score !== undefined && <div>Avg: {rs.avg_score}</div>}
-            </div>
-          ))}
         </div>
       )}
 
       {/* Results table */}
-      {displayResults.length > 0 && (
+      {isMultiRound && activeTab === 'summary' && summary && summary.tc_averaged.length > 0 ? (
+        <>
+          <div className={styles.summary}>
+            <h2>Results: {summary.averaged.passed}/{summary.averaged.total} passed ({summary.averaged.pass_rate}%)</h2>
+            <a href={exportRunUrl(runId)} download className={styles.exportBtn}>Export CSV</a>
+          </div>
+          <AveragedResultsTable results={summary.tc_averaged} />
+        </>
+      ) : displayResults.length > 0 && (
         <>
           <div className={styles.summary}>
             <h2>
@@ -200,7 +201,7 @@ export default function RunDetailPage() {
             results={displayResults}
             expandedRow={expandedRow}
             onToggleRow={(id) => setExpandedRow(expandedRow === id ? null : id)}
-            showRoundColumn={isMultiRound && activeTab === 'summary'}
+            showRoundColumn={false}
           />
         </>
       )}
@@ -269,6 +270,35 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
                 </tr>
               )}
             </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function AveragedResultsTable({ results }: { results: TestCaseAveraged[] }) {
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th className={styles.colTc}>TC</th>
+            <th className={styles.colPass}>Pass</th>
+            <th className={styles.colScore}>Avg Score</th>
+            <th className={styles.colDur}>Avg Time</th>
+            <th>Rounds Passed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map(r => (
+            <tr key={r.test_case_id} className={styles.resultRow}>
+              <td>{r.test_case_name || r.test_case_id}</td>
+              <td><PassFailIcon passed={r.passed} /></td>
+              <td>{r.avg_score !== null ? r.avg_score : '—'}</td>
+              <td>{(r.avg_duration_ms / 1000).toFixed(1)}s</td>
+              <td>{r.rounds_passed}/{r.total_rounds}</td>
+            </tr>
           ))}
         </tbody>
       </table>
