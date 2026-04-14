@@ -731,12 +731,29 @@ Go to **Datasets → + New Dataset**, then click into the dataset to import CSV 
 
 A scorer defines how the judge LLM evaluates your agent's output. The `eval_prompt` is the single source of truth — it contains everything: what to evaluate, scoring criteria, score range, and scoring rules.
 
-The judge LLM always returns:
+### Scoring Formats
+
+AgenticEval supports two scoring formats:
+
+**Standard scoring** (default) — the judge returns a numeric score:
 ```json
 {"score": <number>, "justification": "<detailed explanation referencing the scoring criteria>"}
 ```
-
 The system computes `passed = score >= pass_threshold` (default threshold: 60).
+
+**Boolean rubric scoring** — the judge evaluates each sub-item as pass/fail and returns a structured result:
+```json
+{
+  "items": {"BEH-1": {"pass": 1, "reason": "..."}, "BEH-2": {"pass": 0, "reason": "..."}},
+  "dimensions": {"core_behavior": {"passed": 4, "total": 5, "rate": 0.8}},
+  "overall_pass_rate": 0.77,
+  "critical_failures": ["BEH-2"],
+  "verdict": "pass"
+}
+```
+The system computes `passed = (verdict == "pass") AND (overall_pass_rate >= pass_threshold)`. Both conditions must be met — the scorer's verdict rules (which can encode cascade logic for critical sub-items) and the system's pass_threshold act as independent gates. This means a scorer can define rules like "if the agent fabricates data, force-fail downstream items" via the verdict, while the system still enforces a minimum pass rate.
+
+Set `pass_threshold` in the 0–1 range for boolean rubrics (e.g., `0.6` = 60% of sub-items must pass).
 
 ### Example Scorer
 

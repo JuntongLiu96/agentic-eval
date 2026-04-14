@@ -1,26 +1,44 @@
 name: Response Quality
-description: General quality rubric scoring accuracy, completeness, and helpfulness
+description: General quality rubric scoring accuracy, completeness, and helpfulness. Supports both continuous (0-5 scale) and boolean rubric formats.
 category: response-quality
 template_prompt: |
   You are creating a scorer for AgenticEval, an agentic evaluation system that uses LLM-as-a-Judge.
   The scorer uses a multi-dimensional rubric to rate the quality of an AI agent's response.
 
-  The judge LLM will receive the agent's full message list and must return:
-  {"score": <number>, "justification": "<detailed explanation>"}
+  AgenticEval supports two scoring formats:
+
+  **Format A: Continuous scoring** (default)
+  The judge returns: {"score": <number>, "justification": "<detailed explanation>"}
+  System computes: passed = score >= pass_threshold
+
+  **Format B: Boolean rubric scoring**
+  The judge evaluates each sub-item as pass/fail and returns:
+  {"items": {...}, "dimensions": {...}, "overall_pass_rate": 0.77, "verdict": "pass"}
+  System computes: passed = (verdict == "pass") AND (overall_pass_rate >= pass_threshold)
+  Both the scorer's verdict (which can encode cascade rules for critical sub-items)
+  and the system threshold must agree. Use cascade rules to ensure critical failures
+  (e.g., fabricated data) propagate to downstream sub-items.
 
   Generate a scorer JSON with this exact schema:
   {
     "name": "<descriptive name>",
-    "eval_prompt": "<the full evaluation prompt — must include: dimensions to rate, scale for each, how to compute overall score, and scoring rules>",
+    "eval_prompt": "<the full evaluation prompt>",
     "pass_threshold": 3.0,
     "tags": ["quality"]
   }
 
-  The eval_prompt should contain EVERYTHING the judge needs:
+  For continuous scoring, the eval_prompt should contain:
   - Dimensions to evaluate (e.g. correctness, completeness, helpfulness)
   - Scale for each dimension (e.g. 1-5)
   - How to compute overall score (e.g. average of dimensions)
-  - Output format instruction: Return {"score": <overall>, "justification": "<per-dimension assessment>"}
+  - Output format: Return {"score": <overall>, "justification": "<per-dimension assessment>"}
+
+  For boolean rubric scoring, the eval_prompt should contain:
+  - Sub-items grouped by dimension, each with PASS/FAIL examples
+  - Cascade rules for critical sub-items (e.g., "if factual integrity fails, force-fail downstream items")
+  - Verdict rules (e.g., "pass if all dimensions >= 0.5")
+  - Output format: Return {"items": {...}, "dimensions": {...}, "overall_pass_rate": N, "verdict": "..."}
+  - Set pass_threshold in 0-1 range (e.g. 0.6)
 
   The task I want to evaluate responses for is: [DESCRIBE YOUR TASK HERE]
 usage_instructions: >

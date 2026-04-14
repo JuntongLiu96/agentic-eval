@@ -53,8 +53,9 @@ agenticeval scorers create --name "quality-scorer" \
 ```
 
 Key facts:
-- Judge always returns: `{"score": <number>, "justification": "..."}`
-- `passed` = score >= `pass_threshold`
+- **Standard format:** Judge returns `{"score": <number>, "justification": "..."}`. `passed` = score >= `pass_threshold`.
+- **Boolean rubric format:** Judge returns `{"items": {...}, "dimensions": {...}, "overall_pass_rate": 0.77, "verdict": "pass"}`. `passed` = `verdict == "pass"` AND `overall_pass_rate >= pass_threshold`. Both the scorer's verdict rules and the system threshold must agree — this lets scorers encode cascade logic (e.g., "fabrication in sub-item X force-fails downstream items Y and Z") while the system still enforces a minimum pass rate.
+- Set `pass_threshold` in the 0–1 range for boolean rubrics (e.g., `0.6`), or 0–100 for standard scorers.
 - See [references/scorer-guide.md](references/scorer-guide.md) for how to write effective eval prompts
 
 ### 1.3 Configure an Adapter
@@ -106,9 +107,9 @@ agenticeval runs results {run_id}
 ```
 
 Each result contains:
-- `score` — numeric score from the judge
-- `passed` — boolean (score >= pass_threshold)
-- `judge_reasoning` — detailed justification per criteria
+- `score` — numeric score from the judge (0-100 for standard, 0-1 for boolean rubric)
+- `passed` — boolean. Standard: `score >= pass_threshold`. Boolean rubric: `verdict == "pass" AND overall_pass_rate >= pass_threshold`.
+- `judge_reasoning` — detailed justification (plain text for standard, structured JSON for boolean rubric)
 - `duration_seconds` — how long the agent took
 
 ### 2.3 Compare Runs

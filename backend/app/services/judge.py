@@ -132,7 +132,9 @@ def parse_judge_response(response_text: str, pass_threshold: float | None) -> di
     if "items" in data and "overall_pass_rate" in data:
         score_val = data["overall_pass_rate"]
         verdict = data.get("verdict", "")
-        passed = verdict == "pass"
+        threshold = pass_threshold if pass_threshold is not None else 0.6
+        # Both conditions must be met: scorer verdict says "pass" AND rate >= threshold
+        passed = verdict == "pass" and score_val >= threshold
         justification = json.dumps(data, indent=2)
         return {"score": score_val, "passed": passed, "justification": justification}
 
