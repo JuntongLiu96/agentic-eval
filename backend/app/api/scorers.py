@@ -1,9 +1,10 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._helpers import db_get_or_404
 from app.db.database import get_db
 from app.models.scorer import Scorer
 from app.schemas.scorer import ScorerCreate, ScorerResponse, ScorerUpdate
@@ -34,19 +35,14 @@ async def list_scorers(db: AsyncSession = Depends(get_db)):
 
 @router.get("/scorers/{scorer_id}", response_model=ScorerResponse)
 async def get_scorer(scorer_id: int, db: AsyncSession = Depends(get_db)):
-    scorer = await db.get(Scorer, scorer_id)
-    if not scorer:
-        raise HTTPException(status_code=404, detail="Scorer not found")
-    return scorer
+    return await db_get_or_404(Scorer, scorer_id, db, detail="Scorer not found")
 
 
 @router.put("/scorers/{scorer_id}", response_model=ScorerResponse)
 async def update_scorer(
     scorer_id: int, payload: ScorerUpdate, db: AsyncSession = Depends(get_db)
 ):
-    scorer = await db.get(Scorer, scorer_id)
-    if not scorer:
-        raise HTTPException(status_code=404, detail="Scorer not found")
+    scorer = await db_get_or_404(Scorer, scorer_id, db, detail="Scorer not found")
     if payload.name is not None:
         scorer.name = payload.name
     if payload.description is not None:
@@ -64,8 +60,6 @@ async def update_scorer(
 
 @router.delete("/scorers/{scorer_id}", status_code=204)
 async def delete_scorer(scorer_id: int, db: AsyncSession = Depends(get_db)):
-    scorer = await db.get(Scorer, scorer_id)
-    if not scorer:
-        raise HTTPException(status_code=404, detail="Scorer not found")
+    scorer = await db_get_or_404(Scorer, scorer_id, db, detail="Scorer not found")
     await db.delete(scorer)
     await db.commit()

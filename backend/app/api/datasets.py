@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api._helpers import db_get_or_404
 from app.db.database import get_db
 from app.models.dataset import Dataset, TestCase
 from app.schemas.dataset import (
@@ -47,19 +48,14 @@ async def list_datasets(db: AsyncSession = Depends(get_db)):
 
 @router.get("/datasets/{dataset_id}", response_model=DatasetResponse)
 async def get_dataset(dataset_id: int, db: AsyncSession = Depends(get_db)):
-    dataset = await db.get(Dataset, dataset_id)
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    return dataset
+    return await db_get_or_404(Dataset, dataset_id, db, detail="Dataset not found")
 
 
 @router.put("/datasets/{dataset_id}", response_model=DatasetResponse)
 async def update_dataset(
     dataset_id: int, payload: DatasetUpdate, db: AsyncSession = Depends(get_db)
 ):
-    dataset = await db.get(Dataset, dataset_id)
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = await db_get_or_404(Dataset, dataset_id, db, detail="Dataset not found")
     if payload.name is not None:
         dataset.name = payload.name
     if payload.description is not None:
@@ -91,9 +87,7 @@ async def delete_dataset(dataset_id: int, db: AsyncSession = Depends(get_db)):
 async def create_test_case(
     dataset_id: int, payload: TestCaseCreate, db: AsyncSession = Depends(get_db)
 ):
-    dataset = await db.get(Dataset, dataset_id)
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    await db_get_or_404(Dataset, dataset_id, db, detail="Dataset not found")
     tc = TestCase(
         dataset_id=dataset_id,
         name=payload.name,
@@ -119,9 +113,7 @@ async def list_test_cases(dataset_id: int, db: AsyncSession = Depends(get_db)):
 async def update_test_case(
     testcase_id: int, payload: TestCaseUpdate, db: AsyncSession = Depends(get_db)
 ):
-    tc = await db.get(TestCase, testcase_id)
-    if not tc:
-        raise HTTPException(status_code=404, detail="TestCase not found")
+    tc = await db_get_or_404(TestCase, testcase_id, db, detail="TestCase not found")
     if payload.name is not None:
         tc.name = payload.name
     if payload.data is not None:
@@ -137,9 +129,7 @@ async def update_test_case(
 
 @router.delete("/testcases/{testcase_id}", status_code=204)
 async def delete_test_case(testcase_id: int, db: AsyncSession = Depends(get_db)):
-    tc = await db.get(TestCase, testcase_id)
-    if not tc:
-        raise HTTPException(status_code=404, detail="TestCase not found")
+    tc = await db_get_or_404(TestCase, testcase_id, db, detail="TestCase not found")
     await db.delete(tc)
     await db.commit()
 
@@ -149,9 +139,7 @@ async def delete_test_case(testcase_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/datasets/{dataset_id}/export")
 async def export_dataset_csv(dataset_id: int, db: AsyncSession = Depends(get_db)):
-    dataset = await db.get(Dataset, dataset_id)
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = await db_get_or_404(Dataset, dataset_id, db, detail="Dataset not found")
 
     result = await db.execute(
         select(TestCase).where(TestCase.dataset_id == dataset_id)
@@ -178,9 +166,7 @@ async def import_dataset_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    dataset = await db.get(Dataset, dataset_id)
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    await db_get_or_404(Dataset, dataset_id, db, detail="Dataset not found")
 
     content = await file.read()
     text = content.decode("utf-8")

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from app.api._helpers import db_get_or_404
 from app.db.database import get_db, async_session
 from app.models.adapter import Adapter
 from app.models.dataset import Dataset, TestCase
@@ -35,12 +36,9 @@ async def create_run(payload: EvalRunCreate, db: AsyncSession = Depends(get_db))
             raise HTTPException(status_code=422, detail=f"{field_name} must be a positive integer")
 
     # Validate referenced records exist
-    if not await db.get(Dataset, payload.dataset_id):
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    if not await db.get(Scorer, payload.scorer_id):
-        raise HTTPException(status_code=404, detail="Scorer not found")
-    if not await db.get(Adapter, payload.adapter_id):
-        raise HTTPException(status_code=404, detail="Adapter not found")
+    await db_get_or_404(Dataset, payload.dataset_id, db, detail="Dataset not found")
+    await db_get_or_404(Scorer, payload.scorer_id, db, detail="Scorer not found")
+    await db_get_or_404(Adapter, payload.adapter_id, db, detail="Adapter not found")
 
     run = EvalRun(
         name=payload.name, dataset_id=payload.dataset_id,
@@ -102,26 +100,19 @@ async def compare_runs(run1: int, run2: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/runs/{run_id}", response_model=EvalRunResponse)
 async def get_run(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(EvalRun, run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return run
+    return await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
 
 
 @router.delete("/runs/{run_id}", status_code=204)
 async def delete_run(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(EvalRun, run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
     await db.delete(run)
     await db.commit()
 
 
 @router.post("/runs/{run_id}/start")
 async def start_run(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(EvalRun, run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
     if run.status != RunStatus.pending:
         raise HTTPException(status_code=400, detail=f"Run is {run.status}, not pending")
     events = []
@@ -149,9 +140,7 @@ async def stream_run(run_id: int):
 
 @router.get("/runs/{run_id}/summary")
 async def get_run_summary(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(EvalRun, run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
     if run.num_rounds <= 1:
         summary = await aggregate_run_results(run_id, db)
         return {"num_rounds": 1, "round_mode": run.round_mode,
@@ -168,9 +157,7 @@ async def get_run_summary(run_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/runs/{run_id}/results", response_model=list[EvalResultResponse])
 async def get_run_results(run_id: int, round: int | None = None, db: AsyncSession = Depends(get_db)):
-    run = await db.get(EvalRun, run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
     query = select(EvalResult).where(EvalResult.run_id == run_id)
     if round is not None:
         query = query.where(EvalResult.round_number == round)
@@ -193,9 +180,7 @@ async def get_run_results(run_id: int, round: int | None = None, db: AsyncSessio
 
 @router.get("/runs/{run_id}/export")
 async def export_run(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(EvalRun, run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
     result = await db.execute(select(EvalResult).where(EvalResult.run_id == run_id))
     results = result.scalars().all()
     output = io.StringIO()
