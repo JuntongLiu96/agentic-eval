@@ -66,38 +66,54 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
         yield {"type": "error", "message": f"Failed to connect adapter: {e}"}; return
 
     try:
-        adapter_llm = await bridge.get_judge_llm()
-        judge_client = resolve_judge_llm(judge_config, adapter_llm)
-    except ValueError as e:
-        run.status = RunStatus.failed; await db.commit(); await bridge.disconnect()
-        yield {"type": "error", "message": str(e)}; return
+        try:
+            adapter_llm = await bridge.get_judge_llm()
+            judge_client = resolve_judge_llm(judge_config, adapter_llm)
+        except ValueError as e:
+            run.status = RunStatus.failed
+            run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            yield {"type": "error", "message": str(e)}
+            return
 
-    run.status = RunStatus.running
-    run.started_at = datetime.now(timezone.utc)
-    await db.commit()
-    total_cases = len(test_cases)
-    logger.info(f"Run #{run_id} started: {total_cases} cases x {num_rounds} rounds ({round_mode} mode)")
-    yield {"type": "run_started", "run_id": run_id, "total_cases": total_cases,
-           "num_rounds": num_rounds, "round_mode": round_mode}
+        run.status = RunStatus.running
+        run.started_at = datetime.now(timezone.utc)
+        await db.commit()
+        total_cases = len(test_cases)
+        logger.info(f"Run #{run_id} started: {total_cases} cases x {num_rounds} rounds ({round_mode} mode)")
+        yield {"type": "run_started", "run_id": run_id, "total_cases": total_cases,
+               "num_rounds": num_rounds, "round_mode": round_mode}
 
-    if round_mode == "scorer":
-        async for event in _run_scorer_mode(run, scorer, bridge, judge_client, test_cases, num_rounds, db):
-            yield event
-    else:
-        async for event in _run_agent_mode(run, scorer, bridge, judge_client, test_cases, num_rounds, db):
-            yield event
+        try:
+            if round_mode == "scorer":
+                async for event in _run_scorer_mode(run, scorer, bridge, judge_client, test_cases, num_rounds, db):
+                    yield event
+            else:
+                async for event in _run_agent_mode(run, scorer, bridge, judge_client, test_cases, num_rounds, db):
+                    yield event
+        except Exception as e:
+            logger.exception(f"Run #{run_id} failed during evaluation: {e}")
+            run.status = RunStatus.failed
+            run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            yield {"type": "error", "message": f"Run failed: {e}"}
+            return
 
-    await bridge.disconnect()
-    run.status = RunStatus.completed
-    run.finished_at = datetime.now(timezone.utc)
-    await db.commit()
+        run.status = RunStatus.completed
+        run.finished_at = datetime.now(timezone.utc)
+        await db.commit()
 
-    if num_rounds > 1:
-        pass_threshold = scorer.pass_threshold if scorer.pass_threshold is not None else 60.0
-        summary = await multi_round_summary(run_id, num_rounds, round_mode, pass_threshold, db)
-    else:
-        summary = await aggregate_run_results(run_id, db)
-    yield {"type": "run_completed", "run_id": run_id, "summary": summary}
+        if num_rounds > 1:
+            pass_threshold = scorer.pass_threshold if scorer.pass_threshold is not None else 60.0
+            summary = await multi_round_summary(run_id, num_rounds, round_mode, pass_threshold, db)
+        else:
+            summary = await aggregate_run_results(run_id, db)
+        yield {"type": "run_completed", "run_id": run_id, "summary": summary}
+    finally:
+        try:
+            await bridge.disconnect()
+        except Exception as e:
+            logger.warning(f"Run #{run_id}: bridge.disconnect() raised: {e}")
 
 
 async def _run_agent_mode(
