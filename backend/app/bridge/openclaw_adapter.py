@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from app.bridge.base import AgentResult, BridgeAdapter, LLMClient
+from app.bridge.subprocess_base import SubprocessAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,10 @@ def _jsonrpc_request(method: str, params: dict[str, Any], req_id: int) -> bytes:
 # Adapter
 # ---------------------------------------------------------------------------
 
-class OpenClawAdapter(BridgeAdapter):
+class OpenClawAdapter(SubprocessAdapter, BridgeAdapter):
     """Bridge adapter that drives an OpenClaw Agent through the ACP bridge."""
+
+    _log_prefix = "acp"
 
     def __init__(self) -> None:
         # Connection config
@@ -198,46 +201,9 @@ class OpenClawAdapter(BridgeAdapter):
         await self._acp_initialize()
         return self._process
 
-    async def _drain_stderr(self) -> None:
-        if not self._process or not self._process.stderr:
-            return
-        try:
-            while True:
-                line = await self._process.stderr.readline()
-                if not line:
-                    break
-                text = line.decode().strip()
-                if text:
-                    logger.debug("[acp stderr] %s", text)
-        except Exception:
-            pass
-
     def _next_id(self) -> int:
         self._req_id += 1
         return self._req_id
-
-    async def _read_json_line(self, timeout: float) -> dict | None:
-        """Read one JSON line from the ACP bridge stdout, skipping non-JSON."""
-        if not self._process or not self._process.stdout:
-            return None
-        deadline = asyncio.get_event_loop().time() + timeout
-        while True:
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining <= 0:
-                raise asyncio.TimeoutError()
-            line = await asyncio.wait_for(
-                self._process.stdout.readline(), timeout=remaining
-            )
-            if not line:
-                return None
-            text = line.decode().strip()
-            if not text:
-                continue
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError:
-                logger.debug("[acp stdout, skipping non-JSON] %s", text[:200])
-                continue
 
     async def _send_rpc(self, method: str, params: dict[str, Any]) -> int:
         """Send a JSON-RPC request and return the request id."""

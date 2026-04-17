@@ -4,6 +4,7 @@ import logging
 import uuid
 from typing import Any
 from app.bridge.base import AgentResult, BridgeAdapter, LLMClient
+from app.bridge.subprocess_base import SubprocessAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,9 @@ class StdioJudgeLLMClient:
         return line.get("content", "")
 
 
-class StdioAdapter(BridgeAdapter):
+class StdioAdapter(SubprocessAdapter, BridgeAdapter):
+    _log_prefix = "subprocess"
+
     def __init__(self):
         self.command: str = ""
         self.args: list[str] = []
@@ -58,43 +61,6 @@ class StdioAdapter(BridgeAdapter):
             asyncio.create_task(self._drain_stderr())
             logger.info(f"Subprocess started (pid={self._process.pid})")
         return self._process
-
-    async def _drain_stderr(self) -> None:
-        """Read stderr in background and log it. Prevents pipe buffer from filling."""
-        if not self._process or not self._process.stderr:
-            return
-        try:
-            while True:
-                line = await self._process.stderr.readline()
-                if not line:
-                    break
-                text = line.decode().strip()
-                if text:
-                    logger.debug(f"[subprocess stderr] {text}")
-        except Exception:
-            pass
-
-    async def _read_json_line(self, timeout: float) -> dict | None:
-        """Read one valid JSON line from stdout, skipping non-JSON lines (e.g. Electron logs)."""
-        if not self._process or not self._process.stdout:
-            return None
-        deadline = asyncio.get_event_loop().time() + timeout
-        while True:
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining <= 0:
-                raise asyncio.TimeoutError()
-            line = await asyncio.wait_for(self._process.stdout.readline(), timeout=remaining)
-            if not line:
-                return None
-            text = line.decode().strip()
-            if not text:
-                continue
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError:
-                # Skip non-JSON output (Electron GPU logs, DevTools messages, etc.)
-                logger.debug(f"[subprocess stdout, skipping non-JSON] {text[:200]}")
-                continue
 
     async def disconnect(self) -> None:
         if self._process and self._process.returncode is None:
