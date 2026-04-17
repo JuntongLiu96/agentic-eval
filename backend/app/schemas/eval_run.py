@@ -1,7 +1,8 @@
-import json
 from datetime import datetime
 from typing import Any
 from pydantic import BaseModel, field_validator
+
+from app.schemas._helpers import parse_json_if_str
 
 class EvalRunCreate(BaseModel):
     name: str = ""
@@ -30,5 +31,4 @@ class EvalRunResponse(BaseModel):
     @field_validator("judge_config", mode="before")
     @classmethod
     def parse_json(cls, v: Any) -> Any:
-        if isinstance(v, str): return json.loads(v)
-        return v
+        return parse_json_if_str(v)

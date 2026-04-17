@@ -1,8 +1,9 @@
-import json
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, field_validator
+
+from app.schemas._helpers import parse_json_if_str
 
 
 class ScorerCreate(BaseModel):
@@ -27,10 +28,8 @@ class ScorerResponse(BaseModel):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def parse_tags(cls, v: Any) -> list[str]:
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+    def parse_tags(cls, v: Any) -> Any:
+        return parse_json_if_str(v)
 
 
 class ScorerUpdate(BaseModel):

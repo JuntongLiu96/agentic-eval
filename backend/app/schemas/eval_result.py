@@ -1,6 +1,7 @@
-import json
 from typing import Any
 from pydantic import BaseModel, field_validator
+
+from app.schemas._helpers import parse_json_if_str
 
 class EvalResultResponse(BaseModel):
     id: int
@@ -18,11 +19,9 @@ class EvalResultResponse(BaseModel):
     @field_validator("agent_messages", mode="before")
     @classmethod
     def parse_messages(cls, v: Any) -> Any:
-        if isinstance(v, str): return json.loads(v)
-        return v
+        return parse_json_if_str(v)
 
     @field_validator("score", mode="before")
     @classmethod
     def parse_score(cls, v: Any) -> Any:
-        if isinstance(v, str): return json.loads(v)
-        return v
+        return parse_json_if_str(v)

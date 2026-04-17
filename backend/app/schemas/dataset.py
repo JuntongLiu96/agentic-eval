@@ -1,8 +1,9 @@
-import json
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.schemas._helpers import parse_json_if_str
 
 
 class TestCaseCreate(BaseModel):
@@ -25,9 +26,7 @@ class TestCaseResponse(BaseModel):
     @field_validator("data", "expected_result", "metadata", mode="before")
     @classmethod
     def parse_json_string(cls, v: Any) -> Any:
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+        return parse_json_if_str(v)
 
 
 class TestCaseUpdate(BaseModel):
@@ -57,10 +56,8 @@ class DatasetResponse(BaseModel):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def parse_tags(cls, v: Any) -> list[str]:
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+    def parse_tags(cls, v: Any) -> Any:
+        return parse_json_if_str(v)
 
 
 class DatasetUpdate(BaseModel):

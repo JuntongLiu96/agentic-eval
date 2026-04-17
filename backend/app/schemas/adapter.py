@@ -1,7 +1,8 @@
-import json
 from datetime import datetime
 from typing import Any
 from pydantic import BaseModel, field_validator
+
+from app.schemas._helpers import parse_json_if_str
 
 class AdapterCreate(BaseModel):
     name: str
@@ -20,9 +21,8 @@ class AdapterResponse(BaseModel):
 
     @field_validator("config", mode="before")
     @classmethod
-    def parse_config(cls, v: Any) -> Any:
-        if isinstance(v, str): return json.loads(v)
-        return v
+    def _parse_config(cls, v: Any) -> Any:
+        return parse_json_if_str(v)
 
 class AdapterUpdate(BaseModel):
     name: str | None = None
