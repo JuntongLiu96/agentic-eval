@@ -66,8 +66,19 @@ async def list_runs(db: AsyncSession = Depends(get_db)):
 async def compare_runs(run1: int, run2: int, db: AsyncSession = Depends(get_db)):
     summary1 = await aggregate_run_results(run1, db)
     summary2 = await aggregate_run_results(run2, db)
-    r1 = await db.execute(select(EvalResult).where(EvalResult.run_id == run1))
-    r2 = await db.execute(select(EvalResult).where(EvalResult.run_id == run2))
+    # Multi-round runs have multiple rows per test_case_id. To make comparison
+    # deterministic, restrict to round 1 (the first round). Callers that want a
+    # multi-round aggregate should use /runs/{id}/summary instead.
+    r1 = await db.execute(
+        select(EvalResult)
+        .where(EvalResult.run_id == run1, EvalResult.round_number == 1)
+        .order_by(EvalResult.round_number)
+    )
+    r2 = await db.execute(
+        select(EvalResult)
+        .where(EvalResult.run_id == run2, EvalResult.round_number == 1)
+        .order_by(EvalResult.round_number)
+    )
     results1 = {r.test_case_id: r for r in r1.scalars().all()}
     results2 = {r.test_case_id: r for r in r2.scalars().all()}
     common_ids = set(results1.keys()) & set(results2.keys())

@@ -114,7 +114,7 @@ export interface EvalResult {
   test_case_name: string
   round_number: number
   agent_messages: Record<string, unknown>[] | { main: Record<string, unknown>[]; sub_agents: Record<string, unknown>[] }
-  score: Record<string, unknown>
+  score: number | Record<string, unknown> | string | null | unknown
   judge_reasoning: string
   passed: boolean
   duration_ms: number
