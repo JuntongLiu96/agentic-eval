@@ -69,7 +69,7 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
         try:
             adapter_llm = await bridge.get_judge_llm()
             judge_client = resolve_judge_llm(judge_config, adapter_llm)
-        except ValueError as e:
+        except Exception as e:
             run.status = RunStatus.failed
             run.finished_at = datetime.now(timezone.utc)
             await db.commit()
