@@ -1,5 +1,4 @@
 """AgenticEval CLI entry point."""
-import json as json_mod
 import secrets
 
 import typer

@@ -1,4 +1,3 @@
-import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, Integer, String, Text
