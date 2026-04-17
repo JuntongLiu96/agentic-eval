@@ -17,7 +17,7 @@ from app.models.eval_run import EvalRun, RunStatus
 from app.models.scorer import Scorer
 from app.schemas.eval_result import EvalResultResponse
 from app.schemas.eval_run import EvalRunCreate, EvalRunResponse
-from app.services.aggregator import aggregate_run_results, multi_round_summary, multi_round_per_tc_summary
+from app.services.aggregator import aggregate_run_results, extract_score, multi_round_summary, multi_round_per_tc_summary
 from app.services.orchestrator import run_eval
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -82,19 +82,6 @@ async def compare_runs(run1: int, run2: int, db: AsyncSession = Depends(get_db))
     results1 = {r.test_case_id: r for r in r1.scalars().all()}
     results2 = {r.test_case_id: r for r in r2.scalars().all()}
     common_ids = set(results1.keys()) & set(results2.keys())
-
-    def extract_score(s: Any):
-        if isinstance(s, str):
-            try:
-                s = json.loads(s)
-            except Exception:
-                return None
-        if isinstance(s, (int, float)):
-            return s
-        if isinstance(s, dict) and "score" in s:
-            v = s["score"]
-            return v if isinstance(v, (int, float)) else None
-        return None
 
     comparisons = []
     for tc_id in common_ids:

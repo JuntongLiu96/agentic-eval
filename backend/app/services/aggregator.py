@@ -7,7 +7,7 @@ from app.models.dataset import TestCase
 from app.models.eval_result import EvalResult
 
 
-def _extract_score(score_data: Any) -> float | None:
+def extract_score(score_data: Any) -> float | None:
     """Extract a numeric score from various score formats."""
     if isinstance(score_data, str):
         try:
@@ -22,6 +22,10 @@ def _extract_score(score_data: Any) -> float | None:
         if "overall_score" in score_data and isinstance(score_data["overall_score"], (int, float)):
             return float(score_data["overall_score"])
     return None
+
+
+# Backwards-compat alias for existing callers inside this module.
+_extract_score = extract_score
 
 
 async def aggregate_run_results(run_id: int, db: AsyncSession) -> dict[str, Any]:
