@@ -179,3 +179,40 @@ async def test_http_adapter_health_check_401_raises_valueerror():
         with pytest.raises(ValueError, match="401 Unauthorized"):
             await adapter.health_check()
     await adapter.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_http_adapter_send_test_with_session_id():
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999", "endpoints": {}})
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json = MagicMock(return_value={
+        "messages": [{"role": "assistant", "content": "done"}],
+        "metadata": {"session_id": "sess-001"},
+    })
+    with patch.object(adapter, "_client") as mock_client:
+        mock_client.post = AsyncMock(return_value=mock_response)
+        result = await adapter.send_test({"prompt": "do something"}, session_id="sess-001")
+        call_args = mock_client.post.call_args
+        payload = call_args[1]["json"] if "json" in call_args[1] else call_args[0][1]
+        assert payload.get("session_id") == "sess-001"
+        assert result.success is True
+    await adapter.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_http_adapter_send_test_without_session_id_no_field():
+    adapter = HTTPAdapter()
+    await adapter.connect({"base_url": "http://localhost:9999", "endpoints": {}})
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json = MagicMock(return_value={"messages": [{"role": "assistant", "content": "hi"}], "metadata": {}})
+    with patch.object(adapter, "_client") as mock_client:
+        mock_client.post = AsyncMock(return_value=mock_response)
+        result = await adapter.send_test({"prompt": "hello"})
+        call_args = mock_client.post.call_args
+        payload = call_args[1]["json"] if "json" in call_args[1] else call_args[0][1]
+        assert "session_id" not in payload
+        assert result.success is True
+    await adapter.disconnect()

@@ -30,11 +30,11 @@ class PythonAdapter(BridgeAdapter):
             return await self._instance.health_check()
         return True
 
-    async def send_test(self, test_data: dict[str, Any]) -> AgentResult:
+    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
         if not self._instance:
             return AgentResult(messages=[], success=False, error="Not connected")
         try:
-            result = await self._instance.send_test(test_data)
+            result = await self._instance.send_test(test_data, session_id=session_id)
             if isinstance(result, AgentResult): return result
             return AgentResult(
                 messages=result.get("messages", []),

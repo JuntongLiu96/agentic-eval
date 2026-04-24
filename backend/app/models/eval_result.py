@@ -13,4 +13,5 @@ class EvalResult(Base):
     judge_reasoning: Mapped[str] = mapped_column(Text, default="")
     passed: Mapped[bool] = mapped_column(Boolean, default=False)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    turn_results: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     run: Mapped["EvalRun"] = relationship(back_populates="results")

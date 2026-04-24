@@ -19,13 +19,15 @@ All requests: `Content-Type: application/json`
 | Method | Endpoint | Body / Params | Returns |
 |--------|----------|---------------|---------|
 | `GET` | `/api/datasets/{id}/testcases` | — | `[{id, name, data, expected_result, metadata}]` |
-| `POST` | `/api/datasets/{id}/testcases` | `{name, data: {prompt: "..."}, expected_result: {...}, metadata?}` | `{id, name, ...}` |
+| `POST` | `/api/datasets/{id}/testcases` | `{name, data: {prompt: "..."} or {turns: [...]}, expected_result: {...}, metadata?}` | `{id, name, ...}` |
 | `POST` | `/api/datasets/{id}/import` | multipart `file=@data.csv` | `{imported_count}` |
 | `GET` | `/api/datasets/{id}/export` | — | CSV file |
 | `DELETE` | `/api/testcases/{id}` | — | `204` |
 
 CSV columns: `name,data,expected_result,metadata`
 - `data` must be JSON with a `prompt` key: `{"prompt": "user input here"}`
+- Multi-turn `data`: `{"turns": [{"prompt": "msg1"}, {"prompt": "msg2", "expected_result": {...}}]}`
+- Per-turn `expected_result` is optional; top-level `expected_result` is used for final scoring
 - `expected_result` is JSON the judge compares against
 
 ## Scorers
@@ -49,6 +51,14 @@ CSV columns: `name,data,expected_result,metadata`
 Adapter types:
 - `http`: `config: {base_url: "http://..."}` — agent must serve `/eval/health`, `/eval/run`, `/eval/judge`
 - `stdio`: `config: {command: "...", args: [...]}` — agent runs as subprocess
+
+### Multi-turn adapter contract
+
+For multi-turn support, the agent's `/eval/run` endpoint must:
+- Accept optional `session_id` in the request body
+- When `session_id` is absent: start a new conversation, return `session_id` in `metadata`
+- When `session_id` is present: continue the existing conversation
+- **Return only NEW messages from the current turn** — not the full conversation history. The orchestrator accumulates messages across turns. If your agent returns full history, messages will be duplicated.
 
 ## Runs
 
@@ -75,8 +85,11 @@ Run statuses: `pending` → `running` → `completed` | `failed`
   "score": 85,
   "passed": true,
   "judge_reasoning": "Criterion A (30/30): ... Criterion B (25/30): ... Criterion C (30/40): ...",
-  "duration_seconds": 12.3
+  "duration_seconds": 12.3,
+  "turn_results": null
 }
 ```
+
+`turn_results` is `null` for single-turn test cases. Only populated for turns that have per-turn `expected_result`.
 
 `passed` = `score >= scorer.pass_threshold`

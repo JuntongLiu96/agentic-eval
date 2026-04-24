@@ -14,6 +14,7 @@ class EvalResultResponse(BaseModel):
     judge_reasoning: str
     passed: bool
     duration_ms: int
+    turn_results: Any = None
     model_config = {"from_attributes": True}
 
     @field_validator("agent_messages", mode="before")
@@ -24,4 +25,9 @@ class EvalResultResponse(BaseModel):
     @field_validator("score", mode="before")
     @classmethod
     def parse_score(cls, v: Any) -> Any:
+        return parse_json_if_str(v)
+
+    @field_validator("turn_results", mode="before")
+    @classmethod
+    def parse_turn_results(cls, v: Any) -> Any:
         return parse_json_if_str(v)

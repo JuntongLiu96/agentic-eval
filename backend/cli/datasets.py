@@ -123,15 +123,32 @@ def export_csv(
 def add_case(
     dataset_id: int = typer.Argument(..., help="Dataset ID to add the test case to"),
     name: str = typer.Option(..., "--name", "-n", help="Test case name"),
-    prompt: str = typer.Option(..., "--prompt", "-p", help="User prompt to send to the agent"),
+    prompt: str = typer.Option(None, "--prompt", "-p", help="User prompt (single-turn)"),
+    data: str = typer.Option(None, "--data", help='Test data as JSON (for multi-turn: \'{"turns": [...]}\')'  ),
     expected: str = typer.Option(..., "--expected", "-e",
                                   help="Expected result as JSON string (e.g. '{\"answer\": \"4\"}')"),
 ):
-    """Add a single test case to a dataset."""
+    """Add a single test case to a dataset.
+
+    For single-turn: use --prompt "your prompt here"
+    For multi-turn:  use --data '{"turns": [{"prompt": "msg1"}, {"prompt": "msg2"}]}'
+    """
+    if prompt and data:
+        console.print("[red]Cannot use both --prompt and --data. Use --prompt for single-turn or --data for multi-turn.[/red]")
+        raise typer.Exit(code=1)
+    if not prompt and not data:
+        console.print("[red]Provide either --prompt (single-turn) or --data (multi-turn).[/red]")
+        raise typer.Exit(code=1)
+
     expected_parsed = parse_json_arg(expected, "--expected")
+    if prompt:
+        test_data = {"prompt": prompt}
+    else:
+        test_data = parse_json_arg(data, "--data")
+
     payload = {
         "name": name,
-        "data": {"prompt": prompt},
+        "data": test_data,
         "expected_result": expected_parsed,
     }
     tc = _client().post(f"/api/datasets/{dataset_id}/testcases", json=payload)
@@ -148,17 +165,25 @@ def list_cases(dataset_id: int = typer.Argument(..., help="Dataset ID")):
     table = Table(title=f"Test Cases (Dataset #{dataset_id})")
     table.add_column("ID", style="cyan", width=6)
     table.add_column("Name", style="green")
-    table.add_column("Prompt")
+    table.add_column("Type", width=8)
+    table.add_column("Prompt / Turns")
     table.add_column("Expected Result")
     for tc in data:
         prompt_data = tc.get("data", {})
-        prompt_str = prompt_data.get("prompt", json.dumps(prompt_data)) if isinstance(prompt_data, dict) else str(prompt_data)
+        if isinstance(prompt_data, dict) and "turns" in prompt_data:
+            turns = prompt_data["turns"]
+            type_str = f"[cyan]{len(turns)}-turn[/cyan]"
+            prompt_str = turns[0].get("prompt", "") if turns else ""
+        else:
+            type_str = "single"
+            prompt_str = prompt_data.get("prompt", json.dumps(prompt_data)) if isinstance(prompt_data, dict) else str(prompt_data)
         expected_str = json.dumps(tc.get("expected_result", {}))
         table.add_row(
             str(tc["id"]),
             tc["name"],
-            prompt_str[:60] + ("..." if len(prompt_str) > 60 else ""),
-            expected_str[:60] + ("..." if len(expected_str) > 60 else ""),
+            type_str,
+            prompt_str[:50] + ("..." if len(prompt_str) > 50 else ""),
+            expected_str[:50] + ("..." if len(expected_str) > 50 else ""),
         )
     console.print(table)
 
@@ -167,15 +192,21 @@ def list_cases(dataset_id: int = typer.Argument(..., help="Dataset ID")):
 def update_case(
     testcase_id: int = typer.Argument(..., help="Test case ID"),
     name: str = typer.Option(None, "--name", "-n", help="New name"),
-    prompt: str = typer.Option(None, "--prompt", "-p", help="New prompt"),
+    prompt: str = typer.Option(None, "--prompt", "-p", help="New prompt (single-turn)"),
+    data: str = typer.Option(None, "--data", help='New test data as JSON (for multi-turn)'),
     expected: str = typer.Option(None, "--expected", "-e", help="New expected result (JSON)"),
 ):
     """Update an existing test case."""
+    if prompt and data:
+        console.print("[red]Cannot use both --prompt and --data.[/red]")
+        raise typer.Exit(code=1)
     payload: dict = {}
     if name is not None:
         payload["name"] = name
     if prompt is not None:
         payload["data"] = {"prompt": prompt}
+    if data is not None:
+        payload["data"] = parse_json_arg(data, "--data")
     if expected is not None:
         payload["expected_result"] = parse_json_arg(expected, "--expected")
     if not payload:

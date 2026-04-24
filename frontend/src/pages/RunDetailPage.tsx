@@ -76,6 +76,11 @@ export default function RunDetailPage() {
           const round = (event as any).round
           if (type === 'round_started' && round > 0) {
             setProgress(prev => [...prev, `--- Round ${round}/${(event as any).total_rounds} ---`])
+          } else if (type === 'turn_completed') {
+            const name = (event as any).case_name || ''
+            const turnIdx = (event as any).turn_index
+            const totalTurns = (event as any).total_turns
+            setProgress(prev => [...prev, `  R${round} ${name}: turn ${turnIdx + 1}/${totalTurns}`])
           } else if (type === 'case_completed' && round > 0) {
             const name = (event as any).case_name || ''
             const passed = (event as any).passed ? '✓' : '✗'
@@ -264,6 +269,31 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
                       })()}
                       <h4>Score</h4>
                       <pre>{JSON.stringify(r.score, null, 2)}</pre>
+                      {r.turn_results && r.turn_results.length > 0 && (
+                        <>
+                          <h4>Turn Results</h4>
+                          <table className={styles.table} style={{ marginBottom: '1rem' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ width: 60 }}>Turn</th>
+                                <th style={{ width: 60 }}>Pass</th>
+                                <th style={{ width: 80 }}>Score</th>
+                                <th>Justification</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {r.turn_results.map((tr: any) => (
+                                <tr key={tr.turn_index}>
+                                  <td>{tr.turn_index}</td>
+                                  <td><PassFailIcon passed={tr.passed} /></td>
+                                  <td>{tr.score}</td>
+                                  <td className={styles.reasoning}>{tr.justification}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      )}
                       {Array.isArray(r.agent_messages) ? (
                         <>
                           <h4>Agent Messages ({r.agent_messages.length})</h4>

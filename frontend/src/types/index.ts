@@ -107,6 +107,13 @@ export interface EvalRunCreate {
 }
 
 // --- Eval Result ---
+export interface TurnResult {
+  turn_index: number
+  score: number
+  passed: boolean
+  justification: string
+}
+
 export interface EvalResult {
   id: number
   run_id: number
@@ -118,6 +125,7 @@ export interface EvalResult {
   judge_reasoning: string
   passed: boolean
   duration_ms: number
+  turn_results: TurnResult[] | null
 }
 
 // --- Compare ---

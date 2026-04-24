@@ -276,7 +276,7 @@ class OpenClawAdapter(SubprocessAdapter, BridgeAdapter):
             logger.warning("Health check failed: %s", e)
             return False
 
-    async def send_test(self, test_data: dict[str, Any]) -> AgentResult:
+    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
         """Send a prompt to the OpenClaw agent and collect the response.
 
         ``test_data`` must contain a ``prompt`` key (the user message).

@@ -29,7 +29,27 @@ agenticeval datasets create --name "my-eval" --description "Eval for X capabilit
 Add test cases one by one:
 
 ```bash
+# Single-turn test case (standard)
 agenticeval datasets add-case {dataset_id} --name "basic-task" --prompt "What is 2+2?" --expected '{"answer": "4"}'
+```
+
+Multi-turn test cases use the `turns` format in the data field. Create via API or CSV import:
+
+```bash
+# Multi-turn via API
+curl -X POST http://localhost:9100/api/datasets/{dataset_id}/testcases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "multi-step-booking",
+    "data": {
+      "turns": [
+        {"prompt": "Create a meeting tomorrow at 3pm"},
+        {"prompt": "Change it to 4pm", "expected_result": {"criteria": "Agent confirms time change"}},
+        {"prompt": "Add Bob to the invite"}
+      ]
+    },
+    "expected_result": {"criteria": "Meeting at 4pm with Bob invited"}
+  }'
 ```
 
 Or bulk import via CSV:
@@ -39,8 +59,10 @@ agenticeval datasets import-csv {dataset_id} --file testcases.csv
 ```
 
 CSV format: `name,data,expected_result,metadata`
-- `data` column must contain `{"prompt": "..."}` — this is the user input sent to the agent
-- `expected_result` is what the judge compares the agent output against
+- Single-turn: `data` column contains `{"prompt": "..."}`
+- Multi-turn: `data` column contains `{"turns": [{"prompt": "..."}, ...]}`
+- Each turn can optionally include `expected_result` for per-turn judging
+- The top-level `expected_result` column is always used for final whole-conversation judging
 
 ### 1.2 Create a Scorer
 
@@ -70,7 +92,7 @@ agenticeval adapters create --name "my-agent" --type http --config '{"base_url":
 
 The agent must expose these endpoints:
 - `GET /eval/health` — health check
-- `POST /eval/run` — receives `{prompt, context?}`, returns agent response
+- `POST /eval/run` — receives `{prompt, session_id?}`, returns agent response
 - `POST /eval/judge` — receives `{prompt, response, expected_result, eval_prompt}`, returns `{score, justification}`
 
 **Stdio adapter** (for CLI agents):
@@ -78,6 +100,27 @@ The agent must expose these endpoints:
 ```bash
 agenticeval adapters create --name "cli-agent" --type stdio --config '{"command": "python", "args": ["agent.py"]}'
 ```
+
+**Multi-turn support:**
+
+For agents that support multi-turn conversations (where the agent pauses waiting for user input):
+- The adapter sends `session_id` in the request payload to continue an existing conversation
+- First request: no `session_id` — agent starts a new session and returns `session_id` in response metadata
+- Subsequent requests: `session_id` is included — agent continues the existing conversation
+- HTTP adapter: `session_id` is a field in the JSON POST body
+- Stdio adapter: `session_id` is a field in the JSON message on stdin
+
+**Implementing multi-turn in your agent (important):**
+
+When building the `/eval/run` endpoint to support multi-turn:
+
+1. **Session management:** Keep the agent/conversation instance alive between requests. Use a `Map<session_id, agent_instance>` with idle timeout cleanup (e.g., 15 min).
+2. **Return only NEW messages per turn:** This is the most common pitfall. If your agent internally maintains a full conversation history, each `/eval/run` response must return **only the messages produced by the current turn**, not the full history. The orchestrator accumulates messages across turns itself — if your agent returns the full history, messages will be duplicated.
+   - Track the message count before each `streamMessage()` / `chat()` call
+   - Slice the result to only return `messages[countBefore:]`
+3. **First turn response:** Return `session_id` in the `metadata` field: `{"metadata": {"session_id": "..."}}`
+4. **Subsequent turn responses:** Return the same `session_id` in metadata for consistency.
+5. **Error handling:** If a session is not found (expired/evicted), return a clear error message so the orchestrator can report it.
 
 ---
 

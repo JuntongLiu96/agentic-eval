@@ -76,13 +76,16 @@ class HTTPAdapter(BridgeAdapter):
         except httpx.RequestError:
             return False
 
-    async def send_test(self, test_data: dict[str, Any]) -> AgentResult:
+    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
         if not self._client:
             return AgentResult(messages=[], success=False, error="Not connected")
         endpoint = self.endpoints.get("send_test", "/eval/run")
         logger.info(f"Sending test to {self.base_url}{endpoint}")
         try:
-            resp = await self._client.post(endpoint, json=test_data)
+            payload = dict(test_data)
+            if session_id is not None:
+                payload["session_id"] = session_id
+            resp = await self._client.post(endpoint, json=payload)
             if resp.status_code != 200:
                 error_msg = f"HTTP {resp.status_code}: {resp.text[:500]}"
                 logger.error(f"Agent returned error: {error_msg}")

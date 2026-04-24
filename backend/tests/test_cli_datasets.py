@@ -98,6 +98,35 @@ class TestAddCaseCmd:
         assert result.exit_code == 0
         assert "tc1" in result.stdout
 
+    @patch("cli.datasets.ApiClient")
+    def test_add_case_multi_turn(self, MockClient):
+        mock = MockClient.return_value
+        mock.post.return_value = {"id": 11, "name": "mt1", "dataset_id": 1,
+                                  "data": {"turns": [{"prompt": "msg1"}, {"prompt": "msg2"}]},
+                                  "expected_result": {"criteria": "test"}, "metadata": {}}
+        result = runner.invoke(app, ["datasets", "add-case", "1",
+                                     "--name", "mt1",
+                                     "--data", '{"turns": [{"prompt": "msg1"}, {"prompt": "msg2"}]}',
+                                     "--expected", '{"criteria": "test"}'])
+        assert result.exit_code == 0
+        assert "mt1" in result.stdout
+
+    @patch("cli.datasets.ApiClient")
+    def test_add_case_both_prompt_and_data_fails(self, MockClient):
+        result = runner.invoke(app, ["datasets", "add-case", "1",
+                                     "--name", "tc1",
+                                     "--prompt", "hello",
+                                     "--data", '{"turns": []}',
+                                     "--expected", '{}'])
+        assert result.exit_code == 1
+
+    @patch("cli.datasets.ApiClient")
+    def test_add_case_neither_prompt_nor_data_fails(self, MockClient):
+        result = runner.invoke(app, ["datasets", "add-case", "1",
+                                     "--name", "tc1",
+                                     "--expected", '{}'])
+        assert result.exit_code == 1
+
 
 class TestListCasesCmd:
     @patch("cli.datasets.ApiClient")
@@ -110,6 +139,20 @@ class TestListCasesCmd:
         result = runner.invoke(app, ["datasets", "list-cases", "1"])
         assert result.exit_code == 0
         assert "tc1" in result.stdout
+        assert "single" in result.stdout
+
+    @patch("cli.datasets.ApiClient")
+    def test_list_cases_multi_turn(self, MockClient):
+        mock = MockClient.return_value
+        mock.get.return_value = [
+            {"id": 2, "name": "mt1", "dataset_id": 1,
+             "data": {"turns": [{"prompt": "msg1"}, {"prompt": "msg2"}, {"prompt": "msg3"}]},
+             "expected_result": {"criteria": "test"}, "metadata": {}}
+        ]
+        result = runner.invoke(app, ["datasets", "list-cases", "1"])
+        assert result.exit_code == 0
+        assert "mt1" in result.stdout
+        assert "3-turn" in result.stdout
 
     @patch("cli.datasets.ApiClient")
     def test_list_cases_empty(self, MockClient):

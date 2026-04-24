@@ -84,11 +84,14 @@ class StdioAdapter(SubprocessAdapter, BridgeAdapter):
             logger.warning(f"Health check failed: {e}")
             return False
 
-    async def send_test(self, test_data: dict[str, Any]) -> AgentResult:
+    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
         try:
             process = await self._ensure_process()
             request_id = str(uuid.uuid4())
-            msg = json.dumps({"type": "run_test", "id": request_id, "data": test_data}) + "\n"
+            request_msg = {"type": "run_test", "id": request_id, "data": test_data}
+            if session_id is not None:
+                request_msg["session_id"] = session_id
+            msg = json.dumps(request_msg) + "\n"
             logger.info(f"Sending test to subprocess (id={request_id[:8]})")
             process.stdin.write(msg.encode())
             await process.stdin.drain()
