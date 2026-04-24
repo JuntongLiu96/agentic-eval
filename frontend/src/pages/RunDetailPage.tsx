@@ -283,12 +283,7 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
                             </thead>
                             <tbody>
                               {r.turn_results.map((tr: any) => (
-                                <tr key={tr.turn_index}>
-                                  <td>{tr.turn_index}</td>
-                                  <td><PassFailIcon passed={tr.passed} /></td>
-                                  <td>{tr.score}</td>
-                                  <td className={styles.reasoning}>{tr.justification}</td>
-                                </tr>
+                                <TurnResultRow key={tr.turn_index} turnResult={tr} />
                               ))}
                             </tbody>
                           </table>
@@ -320,6 +315,33 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
         </tbody>
       </table>
     </div>
+  )
+}
+
+function TurnResultRow({ turnResult }: { turnResult: any }) {
+  const [expanded, setExpanded] = useState(false)
+  const justification = turnResult.justification || ''
+  const preview = justification.length > 80
+    ? justification.slice(0, 80) + '...'
+    : justification
+  return (
+    <>
+      <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+        <td>{turnResult.turn_index}</td>
+        <td><PassFailIcon passed={turnResult.passed} /></td>
+        <td>{turnResult.score}</td>
+        <td className={styles.reasoning}>{expanded ? '▼' : '▶'} {preview}</td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={4}>
+            <pre className={styles.detail} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {justification}
+            </pre>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 

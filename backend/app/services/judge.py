@@ -133,6 +133,9 @@ def parse_judge_response(response_text: str, pass_threshold: float | None) -> di
         score_val = data["overall_pass_rate"]
         verdict = data.get("verdict", "")
         threshold = pass_threshold if pass_threshold is not None else 0.6
+        # Normalize threshold to 0-1 scale if it looks like 0-100 scale
+        if threshold > 1.0:
+            threshold = threshold / 100.0
         # Both conditions must be met: scorer verdict says "pass" AND rate >= threshold
         passed = verdict == "pass" and score_val >= threshold
         justification = json.dumps(data, indent=2)
