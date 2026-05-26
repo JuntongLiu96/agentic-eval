@@ -13,6 +13,31 @@ def _client() -> ApiClient:
     return ApiClient(base_url=state["base_url"])
 
 
+@runs_app.command("comparison")
+def comparison(
+    baseline: int = typer.Option(..., "--compare-baseline", help="Cold-baseline run ID"),
+    warm: int = typer.Option(..., "--warm", help="Warm (memory-augmented) run ID"),
+    metrics: str = typer.Option("n_reduction", "--metrics",
+                                 help="Comma-separated metric names"),
+):
+    """AE-5: Compare a cold baseline run vs a warm run; print delta metrics."""
+    metric_list = [m.strip() for m in metrics.split(",") if m.strip()]
+    result = _client().post("/api/runs/comparison", json={
+        "baseline_run_id": baseline, "warm_run_id": warm, "metrics": metric_list,
+    })
+    table = Table(title=f"Comparison: baseline #{baseline} vs warm #{warm}")
+    table.add_column("Test Case", style="cyan")
+    for m in metric_list:
+        table.add_column(m, style="green")
+    for pair in result.get("pairs", []):
+        row = [str(pair["test_case_id"])]
+        for m in metric_list:
+            v = pair["deltas"].get(m)
+            row.append(f"{v:.3f}" if isinstance(v, (int, float)) else "—")
+        table.add_row(*row)
+    console.print(table)
+
+
 @runs_app.command("list")
 def list_runs():
     """List all eval runs."""

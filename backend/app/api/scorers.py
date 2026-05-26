@@ -17,9 +17,11 @@ async def create_scorer(payload: ScorerCreate, db: AsyncSession = Depends(get_db
     scorer = Scorer(
         name=payload.name,
         description=payload.description,
+        scorer_type=payload.scorer_type,
         eval_prompt=payload.eval_prompt,
         pass_threshold=payload.pass_threshold,
         tags=json.dumps(payload.tags),
+        config=json.dumps(payload.config or {}),
     )
     db.add(scorer)
     await db.commit()
@@ -47,12 +49,16 @@ async def update_scorer(
         scorer.name = payload.name
     if payload.description is not None:
         scorer.description = payload.description
+    if payload.scorer_type is not None:
+        scorer.scorer_type = payload.scorer_type
     if payload.eval_prompt is not None:
         scorer.eval_prompt = payload.eval_prompt
     if payload.pass_threshold is not None:
         scorer.pass_threshold = payload.pass_threshold
     if payload.tags is not None:
         scorer.tags = json.dumps(payload.tags)
+    if payload.config is not None:
+        scorer.config = json.dumps(payload.config)
     await db.commit()
     await db.refresh(scorer)
     return scorer

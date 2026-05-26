@@ -25,7 +25,12 @@ class BridgeAdapter(ABC):
     @abstractmethod
     async def health_check(self) -> bool: ...
     @abstractmethod
-    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult: ...
+    async def send_test(
+        self,
+        test_data: dict[str, Any],
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AgentResult: ...
     async def get_judge_llm(self) -> LLMClient | None:
         return None
     @abstractmethod

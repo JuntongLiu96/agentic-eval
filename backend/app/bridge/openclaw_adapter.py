@@ -276,11 +276,19 @@ class OpenClawAdapter(SubprocessAdapter, BridgeAdapter):
             logger.warning("Health check failed: %s", e)
             return False
 
-    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
+    async def send_test(
+        self,
+        test_data: dict[str, Any],
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AgentResult:
         """Send a prompt to the OpenClaw agent and collect the response.
 
         ``test_data`` must contain a ``prompt`` key (the user message).
         Additional keys are passed as context metadata.
+        ``metadata`` (AE-3) — case-level metadata is accepted but not yet
+        forwarded over ACP; recorded in the return AgentResult.metadata for
+        downstream scorers.
         """
         prompt = test_data.get("prompt", "")
         if not prompt:

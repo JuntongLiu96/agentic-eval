@@ -168,3 +168,87 @@ async def multi_round_per_tc_summary(
         })
 
     return rows
+
+
+def _extract_quadrants(metadata_str: str) -> list[str]:
+    """Pull quadrant tags out of a TestCase.metadata_ JSON string.
+
+    Accepts list (e.g. ["cross-episode", "execution-oriented"]) or single
+    string. Missing or malformed → empty list.
+    """
+    if not metadata_str:
+        return []
+    try:
+        meta = json.loads(metadata_str)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    q = meta.get("quadrant") if isinstance(meta, dict) else None
+    if isinstance(q, list):
+        return [str(x) for x in q if x]
+    if isinstance(q, str) and q:
+        return [q]
+    return []
+
+
+async def per_quadrant_summary(
+    run_id: int, pass_threshold: float, db: AsyncSession,
+) -> dict[str, dict[str, Any]]:
+    """Group results by quadrant tag from TestCase.metadata_.quadrant.
+
+    A test case tagged with multiple quadrants (e.g. cross-episode +
+    execution-oriented) contributes to each bucket. Returns
+    {quadrant_label: {total, passed, pass_rate, avg_score?}}.
+    """
+    result = await db.execute(select(EvalResult).where(EvalResult.run_id == run_id))
+    all_results = result.scalars().all()
+    if not all_results:
+        return {}
+
+    tc_ids = list({r.test_case_id for r in all_results})
+    tc_meta: dict[int, list[str]] = {}
+    if tc_ids:
+        tc_result = await db.execute(select(TestCase).where(TestCase.id.in_(tc_ids)))
+        for tc in tc_result.scalars().all():
+            tc_meta[tc.id] = _extract_quadrants(tc.metadata_)
+
+    # Bucket per quadrant. For multi-round, average a test case's score across
+    # its rounds before bucketing — same convention as multi_round_summary.
+    tc_scores: dict[int, list[float]] = defaultdict(list)
+    tc_passed: dict[int, list[bool]] = defaultdict(list)
+    for r in all_results:
+        s = _extract_score(r.score)
+        if s is not None:
+            tc_scores[r.test_case_id].append(s)
+        tc_passed[r.test_case_id].append(bool(r.passed))
+
+    by_quadrant: dict[str, dict[str, Any]] = {}
+    for tc_id, rounds_passed in tc_passed.items():
+        # Majority vote for pass; mean for score (single-round → trivial).
+        passed = sum(rounds_passed) > len(rounds_passed) / 2
+        scores = tc_scores.get(tc_id, [])
+        avg = sum(scores) / len(scores) if scores else None
+
+        labels = tc_meta.get(tc_id) or ["unlabeled"]
+        for lbl in labels:
+            b = by_quadrant.setdefault(lbl, {"total": 0, "passed": 0, "_scores": []})
+            b["total"] += 1
+            if passed:
+                b["passed"] += 1
+            if avg is not None:
+                b["_scores"].append(avg)
+
+    out: dict[str, dict[str, Any]] = {}
+    for lbl, b in by_quadrant.items():
+        total = b["total"]
+        scores = b.pop("_scores")
+        entry: dict[str, Any] = {
+            "total": total,
+            "passed": b["passed"],
+            "pass_rate": round(b["passed"] / total * 100, 1) if total else 0.0,
+        }
+        if scores:
+            entry["avg_score"] = round(sum(scores) / len(scores), 2)
+            entry["min_score"] = round(min(scores), 2)
+            entry["max_score"] = round(max(scores), 2)
+        out[lbl] = entry
+    return out

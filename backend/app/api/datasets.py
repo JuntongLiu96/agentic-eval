@@ -1,7 +1,9 @@
 import csv
 import io
 import json
+from typing import Any
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -193,3 +195,84 @@ async def import_dataset_csv(
 
     await db.commit()
     return {"imported_count": count}
+
+
+# --- AE-4: YAML / JSON dataset import ---
+
+
+def _coerce_cell(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    return json.dumps(v)
+
+
+async def _create_dataset_from_doc(
+    doc: dict, db: AsyncSession
+) -> Dataset:
+    if not isinstance(doc, dict) or "name" not in doc:
+        raise HTTPException(
+            status_code=400,
+            detail="Document must be an object with a top-level 'name' and 'rows'.",
+        )
+    rows = doc.get("rows") or []
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="'rows' must be a list.")
+
+    dataset = Dataset(
+        name=doc["name"],
+        description=doc.get("description", ""),
+        target_type=doc.get("target_type", "custom"),
+        tags=json.dumps(doc.get("tags", []) or []),
+    )
+    db.add(dataset)
+    await db.flush()
+
+    for row in rows:
+        if not isinstance(row, dict) or "name" not in row:
+            raise HTTPException(
+                status_code=400, detail="Each row must be an object with a 'name'."
+            )
+        tc = TestCase(
+            dataset_id=dataset.id,
+            name=row["name"],
+            data=_coerce_cell(row.get("data", {})),
+            expected_result=_coerce_cell(row.get("expected_result", {})),
+            metadata_=_coerce_cell(row.get("metadata", {})),
+        )
+        db.add(tc)
+    await db.commit()
+    await db.refresh(dataset)
+    return dataset
+
+
+@router.post("/datasets/import-yaml", response_model=DatasetResponse, status_code=201)
+async def import_dataset_yaml(
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+):
+    """AE-4: Create a dataset + test cases from a structured YAML upload.
+
+    Document shape: ``{name, description?, target_type?, tags?, rows: [{name, data,
+    expected_result, metadata}, ...]}``. Avoids the CSV round-trip's lossy
+    stringification of nested ``data`` / ``expected_result`` / ``metadata``.
+    """
+    content = await file.read()
+    try:
+        doc = yaml.safe_load(content.decode("utf-8"))
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+    return await _create_dataset_from_doc(doc, db)
+
+
+@router.post("/datasets/import-json", response_model=DatasetResponse, status_code=201)
+async def import_dataset_json(
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+):
+    """AE-4: Same as import-yaml but accepts a JSON document."""
+    content = await file.read()
+    try:
+        doc = json.loads(content.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+    return await _create_dataset_from_doc(doc, db)

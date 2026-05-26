@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiDelete, apiDownloadUrl } from './client'
-import type { EvalRun, EvalRunCreate, EvalResult, RunComparison, MultiRoundSummary } from '../types'
+import type { EvalRun, EvalRunCreate, EvalResult, RunComparison, MultiRoundSummary, ComparisonRunResponse } from '../types'
 
 export const listRuns = () => apiGet<EvalRun[]>('/runs')
 export const getRun = (id: number) => apiGet<EvalRun>(`/runs/${id}`)
@@ -11,6 +11,10 @@ export const getRunResults = (id: number, round?: number) =>
 export const getRunSummary = (id: number) => apiGet<MultiRoundSummary>(`/runs/${id}/summary`)
 export const compareRuns = (run1: number, run2: number) =>
   apiGet<RunComparison>('/runs/compare', { run1: String(run1), run2: String(run2) })
+// AE-10: cold-vs-warm comparison run (paired baseline + warm).
+export const comparisonRun = (
+  baseline_run_id: number, warm_run_id: number, metrics?: string[],
+) => apiPost<ComparisonRunResponse>('/runs/comparison', { baseline_run_id, warm_run_id, metrics })
 export const exportRunUrl = (id: number) => apiDownloadUrl(`/runs/${id}/export`)
 
 export function streamRun(
@@ -27,6 +31,8 @@ export function streamRun(
   source.addEventListener('round_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('case_completed', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('round_completed', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
+  // AE-11: phase transitions in scorer-mode runs.
+  source.addEventListener('phase_started', (e) => onEvent(JSON.parse((e as MessageEvent).data)))
   source.addEventListener('run_completed', (e) => { onEvent(JSON.parse((e as MessageEvent).data)); source.close(); onDone() })
   source.addEventListener('error', () => {
     source.close()

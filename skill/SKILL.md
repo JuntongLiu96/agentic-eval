@@ -77,6 +77,8 @@ agenticeval scorers create --name "quality-scorer" \
 Key facts:
 - **Standard format:** Judge returns `{"score": <number>, "justification": "..."}`. `passed` = score >= `pass_threshold`.
 - **Boolean rubric format:** Judge returns `{"items": {...}, "dimensions": {...}, "overall_pass_rate": 0.77, "verdict": "pass"}`. `passed` = `verdict == "pass"` AND `overall_pass_rate >= pass_threshold`. Both the scorer's verdict rules and the system threshold must agree — this lets scorers encode cascade logic (e.g., "fabrication in sub-item X force-fails downstream items Y and Z") while the system still enforces a minimum pass rate.
+- **Programmatic format (AE-1):** Deterministic rule eval against `agent_metadata` — no LLM call. `config = {rules: [{path, op, value}], pass_threshold}`. Use for numeric thresholds on agent-returned metrics (latency, recall, n_reduction).
+- **Series format (AE-6):** Cross-round assertions for multi-round runs — `monotonic_increasing`, `monotonic_decreasing`, `equals`, `delta_at_least`. Use when a single round's score can't express the property (e.g., confidence must rise across rounds).
 - Set `pass_threshold` in the 0–1 range for boolean rubrics (e.g., `0.6`), or 0–100 for standard scorers.
 - See [references/scorer-guide.md](references/scorer-guide.md) for how to write effective eval prompts
 
@@ -160,6 +162,22 @@ Each result contains:
 ```bash
 agenticeval runs compare {run1_id} {run2_id}
 ```
+
+**Paired cold-vs-warm comparison (AE-5):** `POST /api/runs/comparison` pairs a
+baseline run with a warm run and returns per-testcase metric deltas (e.g.
+`n_reduction`). UI at `/runs/comparison`.
+
+### 2.4 Live Progress (SSE)
+
+`GET /api/runs/{id}/stream` emits `run_started`, `round_started`,
+`phase_started` (AE-11 — `phase: "agent_run" | "judge"`), `case_started`,
+`turn_completed`, `case_completed`, `round_completed`, `run_completed`.
+
+### 2.5 Per-quadrant Breakdown (AE-7)
+
+`GET /api/runs/{id}/summary` includes `by_quadrant` when test cases carry a
+`quadrant` tag in `TestCase.metadata`. Multi-tagged cases contribute to every
+matching bucket. Frontend `RunDetailPage` renders a `QuadrantBreakdown` panel.
 
 ### 2.4 Export Results
 

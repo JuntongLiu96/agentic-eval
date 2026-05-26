@@ -180,6 +180,32 @@ export interface MultiRoundSummary {
   round_summaries: RoundSummary[]
   averaged: RoundSummary
   tc_averaged: TestCaseAveraged[]
+  by_quadrant?: Record<string, QuadrantSummary>
+}
+
+// AE-7: per-quadrant aggregation
+export interface QuadrantSummary {
+  total: number
+  passed: number
+  pass_rate: number
+  avg_score?: number
+  min_score?: number
+  max_score?: number
+}
+
+// AE-10: cold-vs-warm comparison run
+export interface ComparisonPair {
+  test_case_id: number
+  baseline_metadata: Record<string, unknown>
+  warm_metadata: Record<string, unknown>
+  deltas: Record<string, number>
+}
+
+export interface ComparisonRunResponse {
+  baseline_run_id: number
+  warm_run_id: number
+  metrics: string[]
+  pairs: ComparisonPair[]
 }
 
 // --- Boolean Rubric ---

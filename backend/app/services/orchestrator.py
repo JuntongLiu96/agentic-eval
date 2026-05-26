@@ -19,15 +19,60 @@ from app.bridge.base import AgentResult
 logger = logging.getLogger(__name__)
 
 
+def _parse_case_metadata(tc: Any) -> dict[str, Any]:
+    """Parse TestCase.metadata_ (DB column ``metadata``) into a dict.
+
+    Defaults to an empty dict on malformed JSON so the eval doesn't crash on
+    legacy rows. Always returns a fresh dict so callers can mutate safely.
+    """
+    raw = getattr(tc, "metadata_", None)
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        if not raw.strip():
+            return {}
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
 async def _run_judge(
     judge_client: Any, scorer: Scorer, expected: Any,
     agent_messages: list, sub_agent_messages: list | None,
+    agent_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Assemble judge prompt, call LLM, parse response."""
+    """Assemble judge prompt, call LLM, parse response.
+
+    AE-1: if the scorer is programmatic, dispatch to the deterministic scorer
+    instead of calling an LLM at all.
+    AE-2: ``agent_metadata`` is forwarded into the judge prompt for LLM scorers
+    and is the *sole* input for programmatic scorers.
+    """
+    scorer_type = getattr(scorer, "scorer_type", None) or "llm_judge"
+    if scorer_type == "programmatic":
+        from app.services.programmatic_scorer import evaluate_programmatic
+        return evaluate_programmatic(
+            scorer=scorer,
+            agent_metadata=agent_metadata or {},
+            agent_messages=agent_messages,
+        )
+    if scorer_type == "series":
+        # AE-6: series scorers operate over multi-round metadata. When invoked
+        # per-round (as here), evaluate as a 1-element series so non-cross-round
+        # checks still run; callers that need true cross-round evaluation pull
+        # results post-hoc and invoke ``evaluate_series`` directly.
+        from app.services.series_scorer import evaluate_series
+        return evaluate_series(scorer, [agent_metadata or {}])
     judge_messages = assemble_judge_prompt(
         eval_prompt=scorer.eval_prompt, expected_result=expected,
         agent_messages=agent_messages,
         sub_agent_messages=sub_agent_messages or None,
+        agent_metadata=agent_metadata,
     )
     judge_response = await judge_client.chat(judge_messages)
     return parse_judge_response(judge_response, scorer.pass_threshold)
@@ -140,10 +185,13 @@ async def _run_scorer_mode(
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Scorer mode: run agent once (round 0), then judge N times."""
     # Phase 1: Run agent for all test cases
+    yield {"type": "phase_started", "phase": "agent_run", "total_rounds": num_rounds}
     yield {"type": "round_started", "round": 0, "total_rounds": num_rounds, "phase": "agent_run"}
     cached_results: dict[int, Any] = {}
     for i, tc in enumerate(test_cases):
         test_data = json.loads(tc.data) if isinstance(tc.data, str) else tc.data
+        # AE-3: forward TestCase.metadata to the bridge (case_id, scope, phase, round_idx, ...)
+        case_metadata = _parse_case_metadata(tc)
         yield {"type": "case_started", "round": 0, "case_index": i, "case_name": tc.name,
                "total_cases": len(test_cases)}
         start_time = time.monotonic()
@@ -158,11 +206,19 @@ async def _run_scorer_mode(
         session_id = None
         all_messages = []
         all_sub_messages = []
+        accumulated_metadata: dict[str, Any] = {}
         turn_results_list = []
         agent_failed = False
 
         for turn_index, turn in enumerate(turns):
-            agent_result = await bridge.send_test({"prompt": turn["prompt"]}, session_id=session_id)
+            turn_meta = dict(case_metadata)
+            turn_meta["phase"] = "agent_run"
+            turn_meta["turn_index"] = turn_index
+            agent_result = await bridge.send_test(
+                {"prompt": turn["prompt"]},
+                session_id=session_id,
+                metadata=turn_meta,
+            )
             if not agent_result.success:
                 agent_failed = True
                 break
@@ -170,6 +226,9 @@ async def _run_scorer_mode(
                 session_id = agent_result.metadata["session_id"]
             all_messages.extend(agent_result.messages)
             all_sub_messages.extend(agent_result.sub_agent_messages)
+            # AE-2: accumulate metadata across turns.
+            if agent_result.metadata:
+                accumulated_metadata.update(agent_result.metadata)
 
         duration = int((time.monotonic() - start_time) * 1000)
 
@@ -179,7 +238,7 @@ async def _run_scorer_mode(
             combined = AgentResult(
                 messages=all_messages,
                 sub_agent_messages=all_sub_messages,
-                metadata=agent_result.metadata if turns else {},
+                metadata=accumulated_metadata if turns else {},
                 success=True,
             )
             cached_results[tc.id] = {"result": combined, "duration_ms": duration, "turn_results": turn_results_list}
@@ -189,6 +248,7 @@ async def _run_scorer_mode(
     yield {"type": "round_completed", "round": 0}
 
     # Phase 2: Judge N times
+    yield {"type": "phase_started", "phase": "judge", "total_rounds": num_rounds}
     for rnd in range(1, num_rounds + 1):
         yield {"type": "round_started", "round": rnd, "total_rounds": num_rounds}
         for i, tc in enumerate(test_cases):
@@ -209,6 +269,8 @@ async def _eval_single_case(
     """Evaluate a single test case (single-turn or multi-turn) for a single round."""
     test_data = json.loads(tc.data) if isinstance(tc.data, str) else tc.data
     expected = json.loads(tc.expected_result) if isinstance(tc.expected_result, str) else tc.expected_result
+    # AE-3: forward TestCase.metadata to the bridge (case_id, scope, phase, round_idx, ...)
+    case_metadata = _parse_case_metadata(tc)
 
     logger.info(f"Run #{run.id} round {round_number} case {case_index + 1}/{total_cases}: {tc.name}")
     yield {"type": "case_started", "round": round_number, "case_index": case_index,
@@ -233,6 +295,7 @@ async def _eval_single_case(
         session_id = None
         all_messages = []
         all_sub_messages = []
+        accumulated_metadata: dict[str, Any] = {}
         turn_results_list = []
 
         logger.info(f"Run #{run.id} case {tc.name}: {len(turns)} turns to execute")
@@ -240,7 +303,14 @@ async def _eval_single_case(
         for turn_index, turn in enumerate(turns):
             logger.info(f"Run #{run.id} case {tc.name}: sending turn {turn_index + 1}/{len(turns)} "
                         f"(session_id={session_id})")
-            agent_result = await bridge.send_test({"prompt": turn["prompt"]}, session_id=session_id)
+            turn_meta = dict(case_metadata)
+            turn_meta["round_idx"] = round_number
+            turn_meta["turn_index"] = turn_index
+            agent_result = await bridge.send_test(
+                {"prompt": turn["prompt"]},
+                session_id=session_id,
+                metadata=turn_meta,
+            )
 
             if not agent_result.success:
                 logger.warning(f"Run #{run.id} round {round_number} case {tc.name} turn {turn_index}: "
@@ -263,6 +333,10 @@ async def _eval_single_case(
 
             all_messages.extend(agent_result.messages)
             all_sub_messages.extend(agent_result.sub_agent_messages)
+            # AE-2: merge per-turn metadata (later turns override earlier keys —
+            # final-turn metrics like n_reduction reflect the whole trajectory).
+            if agent_result.metadata:
+                accumulated_metadata.update(agent_result.metadata)
             logger.info(f"Run #{run.id} case {tc.name}: turn {turn_index} returned "
                         f"{len(agent_result.messages)} messages (total accumulated: {len(all_messages)})")
 
@@ -271,6 +345,7 @@ async def _eval_single_case(
                     turn_parsed = await _run_judge(
                         judge_client, scorer, turn["expected_result"],
                         all_messages, all_sub_messages or None,
+                        agent_metadata=accumulated_metadata,
                     )
                     turn_results_list.append({
                         "turn_index": turn_index,
@@ -297,6 +372,7 @@ async def _eval_single_case(
         class _FinalResult:
             messages = all_messages
             sub_agent_messages = all_sub_messages
+            metadata = accumulated_metadata
             success = True
         final_result = _FinalResult()
     else:
@@ -317,8 +393,11 @@ async def _eval_single_case(
         turn_results_list = cached_agent_result.get("turn_results", [])
 
     try:
+        # AE-2: feed accumulated agent metadata to the scorer.
+        final_metadata = getattr(final_result, "metadata", None) or {}
         parsed = await _run_judge(judge_client, scorer, expected,
-                                   all_messages, all_sub_messages or None)
+                                   all_messages, all_sub_messages or None,
+                                   agent_metadata=final_metadata)
         logger.info(f"Run #{run.id} round {round_number} case {tc.name}: "
                      f"score={parsed['score']}, passed={parsed['passed']}")
         all_msg_obj = _build_all_messages(final_result)

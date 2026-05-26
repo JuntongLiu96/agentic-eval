@@ -8,6 +8,7 @@ import AdaptersPage from './pages/AdaptersPage'
 import RunsPage from './pages/RunsPage'
 import RunDetailPage from './pages/RunDetailPage'
 import ComparePage from './pages/ComparePage'
+import ComparisonPage from './pages/ComparisonPage'
 
 export default function App() {
   const location = useLocation()
@@ -22,6 +23,7 @@ export default function App() {
         <h2 className={styles.logo}>AgenticEval</h2>
         <ul className={styles.navList}>
           <li><Link to="/" className={isActive('/runs') || location.pathname === '/' ? styles.active : ''}>Runs</Link></li>
+          <li><Link to="/runs/comparison" className={isActive('/runs/comparison') ? styles.active : ''}>Comparison</Link></li>
           <li><Link to="/datasets" className={isActive('/datasets') ? styles.active : ''}>Datasets</Link></li>
           <li><Link to="/scorers" className={isActive('/scorers') ? styles.active : ''}>Scorers</Link></li>
           <li><Link to="/adapters" className={isActive('/adapters') ? styles.active : ''}>Adapters</Link></li>
@@ -35,6 +37,7 @@ export default function App() {
           <Route path="/scorers" element={<ScorersPage />} />
           <Route path="/adapters" element={<AdaptersPage />} />
           <Route path="/runs/compare" element={<ComparePage />} />
+          <Route path="/runs/comparison" element={<ComparisonPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
         </Routes>
       </main>

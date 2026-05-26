@@ -109,6 +109,24 @@ def import_csv(
     console.print(f"[green]Imported {result['imported_count']} test cases.[/green]")
 
 
+@datasets_app.command("import-yaml")
+def import_yaml_cmd(
+    file: str = typer.Option(..., "--file", "-f", help="Path to YAML file"),
+):
+    """AE-4: Create a dataset + test cases from a structured YAML document."""
+    result = _client().upload("/api/datasets/import-yaml", file_path=file)
+    console.print(f"[green]Imported dataset #{result['id']}: {result['name']}[/green]")
+
+
+@datasets_app.command("import-json")
+def import_json_cmd(
+    file: str = typer.Option(..., "--file", "-f", help="Path to JSON file"),
+):
+    """AE-4: Create a dataset + test cases from a structured JSON document."""
+    result = _client().upload("/api/datasets/import-json", file_path=file)
+    console.print(f"[green]Imported dataset #{result['id']}: {result['name']}[/green]")
+
+
 @datasets_app.command("export-csv")
 def export_csv(
     dataset_id: int = typer.Argument(..., help="Dataset ID to export"),

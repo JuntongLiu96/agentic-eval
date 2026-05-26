@@ -69,12 +69,42 @@ For multi-turn support, the agent's `/eval/run` endpoint must:
 | `GET` | `/api/runs/{id}` | — | `{id, status, started_at, finished_at, ...}` |
 | `POST` | `/api/runs/{id}/start` | — | Synchronous. Returns when complete. `{id, status: "completed"}` |
 | `GET` | `/api/runs/{id}/results` | `?round=N` (optional) | `[{testcase_id, round_number, score, passed, judge_reasoning, duration_seconds}]` |
-| `GET` | `/api/runs/{id}/summary` | — | `{num_rounds, round_mode, round_summaries: [...], averaged: {...}}` |
+| `GET` | `/api/runs/{id}/summary` | — | `{num_rounds, round_mode, round_summaries: [...], averaged: {...}, by_quadrant?: {...}}` |
 | `GET` | `/api/runs/compare` | `?run1_id=X&run2_id=Y` | Per-testcase comparison with deltas |
+| `POST` | `/api/runs/comparison` | `{baseline_run_id, warm_run_id, metrics?}` | **AE-5**: paired cold/warm metric deltas (`n_reduction` etc.) per test case |
+| `GET` | `/api/runs/{id}/stream` | — | Server-Sent Events: `run_started`, `round_started`, `phase_started`, `case_started`, `turn_completed`, `case_completed`, `round_completed`, `run_completed`, `error` |
 | `GET` | `/api/runs/{id}/export` | — | CSV file |
 | `DELETE` | `/api/runs/{id}` | — | `204` |
 
 Run statuses: `pending` → `running` → `completed` | `failed`
+
+**SSE event types** (`/api/runs/{id}/stream`):
+- `run_started`, `run_completed` — bracket the whole run.
+- `round_started` / `round_completed` — bracket each round (round 0 in scorer mode = agent phase).
+- `phase_started` (AE-11) — emitted at scorer-mode phase boundaries: `{phase: "agent_run"}` and `{phase: "judge"}`.
+- `case_started`, `case_completed`, `turn_completed` — per-test-case progress.
+
+## Dataset imports
+
+| Method | Endpoint | Body | Returns |
+|--------|----------|------|---------|
+| `POST` | `/api/datasets/import-yaml` | multipart YAML file | **AE-4**: created dataset |
+| `POST` | `/api/datasets/import-json` | multipart JSON file | **AE-4**: created dataset |
+
+Document shape: `{name, description?, target_type?, tags?, rows: [{name, data, expected_result, metadata?}]}`.
+
+## Scorer types
+
+| `scorer_type` | Behavior |
+|---|---|
+| `llm_judge` | Default — LLM grades the messages against `eval_prompt`. |
+| `boolean_rubric` | LLM returns a structured rubric (`items`, `dimensions`, `verdict`). |
+| `programmatic` (AE-1) | Deterministic rule eval against `agent_metadata`. `config = {rules: [{path, op, value}], pass_threshold}`. No LLM call. |
+| `series` (AE-6) | Cross-round assertions: `monotonic_increasing`, `monotonic_decreasing`, `equals`, `delta_at_least`. |
+
+## Per-quadrant aggregation (AE-7)
+
+`GET /api/runs/{id}/summary` includes `by_quadrant: {<label>: {total, passed, pass_rate, avg_score?}}` when test cases carry a `quadrant` tag in `TestCase.metadata`. Multi-tagged cases (e.g. `["cross-episode", "execution-oriented"]`) contribute to every matching bucket. Cases without a tag fall into `unlabeled`.
 
 ## Result Object
 

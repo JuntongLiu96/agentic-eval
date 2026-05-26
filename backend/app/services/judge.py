@@ -56,10 +56,16 @@ def resolve_judge_llm(judge_config: dict[str, Any], adapter_llm: LLMClient | Non
 
 def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
                           agent_messages: list[dict[str, Any]],
-                          sub_agent_messages: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
+                          sub_agent_messages: list[dict[str, Any]] | None = None,
+                          agent_metadata: dict[str, Any] | None = None) -> list[dict[str, str]]:
     """Assemble the judge prompt from the scorer's eval_prompt, expected result, and agent output.
 
     The eval_prompt contains everything: scoring criteria, score range, and scoring rules.
+
+    AE-2: ``agent_metadata`` is the bridge-returned metadata dict (numeric metrics,
+    retrieval/usage signals, etc). It is exposed to the eval_prompt as the
+    ``{{agent_metadata}}`` template variable and also rendered as a dedicated
+    section so unparameterised prompts can still see it.
     """
     sub_agent_section = ""
     if sub_agent_messages:
@@ -67,6 +73,19 @@ def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
 
 ## Sub-Agent Messages (internal agent calls)
 {json.dumps(sub_agent_messages, indent=2)}
+"""
+
+    # AE-2: render the {{agent_metadata}} template variable before assembling the
+    # user message so scorer authors can place it wherever they want in the prompt.
+    rendered_metadata = json.dumps(agent_metadata or {}, indent=2)
+    eval_prompt = eval_prompt.replace("{{agent_metadata}}", rendered_metadata)
+
+    metadata_section = ""
+    if agent_metadata:
+        metadata_section = f"""
+
+## Agent Metadata (structured metrics returned by the bridge)
+{rendered_metadata}
 """
 
     user_content = f"""## Scoring Criteria & Rules
@@ -77,7 +96,7 @@ def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
 
 ## Agent Output (main agent message list)
 {json.dumps(agent_messages, indent=2)}
-{sub_agent_section}
+{sub_agent_section}{metadata_section}
 Respond with a JSON object containing:
 - "score": a numeric score value per the scoring rules above
 - "justification": a detailed explanation of why you assigned this score, referencing specific scoring criteria and specific parts of the agent's output

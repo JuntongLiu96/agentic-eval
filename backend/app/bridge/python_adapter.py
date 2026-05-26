@@ -30,11 +30,24 @@ class PythonAdapter(BridgeAdapter):
             return await self._instance.health_check()
         return True
 
-    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
+    async def send_test(
+        self,
+        test_data: dict[str, Any],
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AgentResult:
         if not self._instance:
             return AgentResult(messages=[], success=False, error="Not connected")
         try:
-            result = await self._instance.send_test(test_data, session_id=session_id)
+            # AE-3: forward metadata when the inner agent's send_test accepts it.
+            # Probe the signature so we stay backward-compatible with agents written
+            # against the pre-AE-3 contract.
+            import inspect
+            sig = inspect.signature(self._instance.send_test)
+            kwargs: dict[str, Any] = {"session_id": session_id}
+            if "metadata" in sig.parameters and metadata is not None:
+                kwargs["metadata"] = metadata
+            result = await self._instance.send_test(test_data, **kwargs)
             if isinstance(result, AgentResult): return result
             return AgentResult(
                 messages=result.get("messages", []),

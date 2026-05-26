@@ -8,6 +8,8 @@ import { listAdapters } from '../api/adapters'
 import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
 import BooleanRubricView from '../components/BooleanRubricView'
+import QuadrantBreakdown from '../components/QuadrantBreakdown'
+import SeriesChart from '../components/SeriesChart'
 import { parseBooleanRubric } from '../utils/booleanRubric'
 import type { EvalResult, TestCaseAveraged } from '../types'
 import styles from './RunDetailPage.module.css'
@@ -45,7 +47,7 @@ export default function RunDetailPage() {
   const { data: summary } = useQuery({
     queryKey: ['summary', runId],
     queryFn: () => getRunSummary(runId),
-    enabled: isMultiRound && (run?.status === 'completed' || run?.status === 'failed'),
+    enabled: run?.status === 'completed' || run?.status === 'failed',
   })
 
   const { data: testCases } = useQuery({
@@ -153,6 +155,16 @@ export default function RunDetailPage() {
           <h3>Progress</h3>
           {progress.map((p, i) => <div key={i} className={styles.logLine}>{p}</div>)}
         </div>
+      )}
+
+      {/* AE-7/AE-8: per-quadrant breakdown (single & multi-round) */}
+      {summary?.by_quadrant && Object.keys(summary.by_quadrant).length > 0 && (
+        <QuadrantBreakdown byQuadrant={summary.by_quadrant} />
+      )}
+
+      {/* AE-9: per-round series chart (multi-round only) */}
+      {isMultiRound && summary && summary.round_summaries.length > 1 && (
+        <SeriesChart rounds={summary.round_summaries} />
       )}
 
       {/* Tab bar for multi-round runs */}

@@ -76,7 +76,12 @@ class HTTPAdapter(BridgeAdapter):
         except httpx.RequestError:
             return False
 
-    async def send_test(self, test_data: dict[str, Any], session_id: str | None = None) -> AgentResult:
+    async def send_test(
+        self,
+        test_data: dict[str, Any],
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AgentResult:
         if not self._client:
             return AgentResult(messages=[], success=False, error="Not connected")
         endpoint = self.endpoints.get("send_test", "/eval/run")
@@ -85,6 +90,10 @@ class HTTPAdapter(BridgeAdapter):
             payload = dict(test_data)
             if session_id is not None:
                 payload["session_id"] = session_id
+            if metadata:
+                # AE-3: forward case metadata (case_id, scope, phase, round_idx, etc.)
+                # to the target agent so it can scope memory operations correctly.
+                payload["metadata"] = metadata
             resp = await self._client.post(endpoint, json=payload)
             if resp.status_code != 200:
                 error_msg = f"HTTP {resp.status_code}: {resp.text[:500]}"
