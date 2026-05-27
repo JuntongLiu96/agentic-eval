@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete, apiUpload, apiDownloadUrl } from './client'
+import { apiGet, apiPost, apiPut, apiDelete, apiUpload, apiDownloadUrl } from './client'
 import type { Dataset, DatasetCreate, TestCase, TestCaseCreate } from '../types'
 
 export const listDatasets = () => apiGet<Dataset[]>('/datasets')
@@ -10,6 +10,8 @@ export const listTestCases = (datasetId: number) => apiGet<TestCase[]>(`/dataset
 export const createTestCase = (datasetId: number, data: TestCaseCreate) =>
   apiPost<TestCase>(`/datasets/${datasetId}/testcases`, data)
 export const deleteTestCase = (id: number) => apiDelete(`/testcases/${id}`)
+export const updateTestCase = (id: number, data: Partial<TestCaseCreate>) =>
+  apiPut<TestCase>(`/testcases/${id}`, data)
 
 export const importCsv = (datasetId: number, file: File) =>
   apiUpload<{ imported_count: number }>(`/datasets/${datasetId}/import`, file)

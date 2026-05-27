@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getDataset, listTestCases, createTestCase, deleteTestCase, importCsv, exportCsvUrl } from '../api/datasets'
+import { getDataset, listTestCases, createTestCase, deleteTestCase, updateTestCase, importCsv, exportCsvUrl } from '../api/datasets'
+import { listScorers } from '../api/scorers'
 import styles from './DatasetDetailPage.module.css'
 
 export default function DatasetDetailPage() {
@@ -12,12 +13,18 @@ export default function DatasetDetailPage() {
 
   const { data: dataset } = useQuery({ queryKey: ['dataset', datasetId], queryFn: () => getDataset(datasetId) })
   const { data: testCases, isLoading } = useQuery({ queryKey: ['testcases', datasetId], queryFn: () => listTestCases(datasetId) })
+  const { data: scorers } = useQuery({ queryKey: ['scorers'], queryFn: listScorers })
   const createMut = useMutation({
     mutationFn: (data: { name: string; data: unknown; expected_result: unknown }) => createTestCase(datasetId, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['testcases', datasetId] }); setShowForm(false); resetForm() },
   })
   const deleteMut = useMutation({
     mutationFn: deleteTestCase,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['testcases', datasetId] }),
+  })
+  const updateMut = useMutation({
+    mutationFn: ({ id, metadata }: { id: number; metadata: Record<string, unknown> }) =>
+      updateTestCase(id, { metadata }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['testcases', datasetId] }),
   })
   const importMut = useMutation({
@@ -80,18 +87,47 @@ export default function DatasetDetailPage() {
       <h2>Test Cases ({testCases?.length || 0})</h2>
       <table className={styles.table}>
         <thead>
-          <tr><th>ID</th><th>Name</th><th>Prompt</th><th>Expected Result</th><th>Actions</th></tr>
+          <tr><th>ID</th><th>Name</th><th>Prompt</th><th>Expected Result</th><th>Scorers</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {testCases?.map(tc => {
             const data = tc.data as Record<string, unknown>
             const promptStr = typeof data?.prompt === 'string' ? data.prompt : JSON.stringify(tc.data)
+            const md = (tc.metadata || {}) as Record<string, unknown>
+            const rawIds = md.scorer_ids
+            const single = md.scorer_id
+            const caseScorerIds: number[] = Array.isArray(rawIds)
+              ? (rawIds as unknown[]).filter((x): x is number => typeof x === 'number')
+              : typeof single === 'number' ? [single] : []
+            function toggleScorer(sid: number) {
+              const next = caseScorerIds.includes(sid)
+                ? caseScorerIds.filter(x => x !== sid)
+                : [...caseScorerIds, sid]
+              const { scorer_id: _drop, scorer_ids: _drop2, ...rest } = md
+              updateMut.mutate({ id: tc.id, metadata: { ...rest, scorer_ids: next } })
+            }
             return (
               <tr key={tc.id}>
                 <td>{tc.id}</td>
                 <td>{tc.name}</td>
                 <td className={styles.jsonCell}>{promptStr.slice(0, 80)}{promptStr.length > 80 ? '...' : ''}</td>
                 <td className={styles.jsonCell}>{JSON.stringify(tc.expected_result).slice(0, 80)}</td>
+                <td>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {scorers?.map(s => {
+                      const on = caseScorerIds.includes(s.id)
+                      return (
+                        <button key={s.id} type="button" onClick={() => toggleScorer(s.id)}
+                          title={on ? 'Pinned for this case' : 'Click to pin'}
+                          style={{ padding: '2px 8px', fontSize: 11, borderRadius: 12, cursor: 'pointer',
+                            border: '1px solid #ccc', background: on ? '#0a66c2' : '#fff', color: on ? '#fff' : '#666' }}>
+                          {s.name}
+                        </button>
+                      )
+                    })}
+                    {caseScorerIds.length === 0 && <span style={{ fontSize: 11, color: '#999' }}>(run default)</span>}
+                  </div>
+                </td>
                 <td>
                   <button className={styles.btnDanger} onClick={() => { if (confirm('Delete?')) deleteMut.mutate(tc.id) }}>Delete</button>
                 </td>

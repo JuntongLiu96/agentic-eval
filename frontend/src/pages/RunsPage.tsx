@@ -34,13 +34,8 @@ export default function RunsPage() {
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<EvalRunCreate>({
-    name: '', dataset_id: 0, scorer_id: 0, adapter_id: 0, num_rounds: 1, round_mode: 'agent', scorer_ids: [],
+    name: '', dataset_id: 0, scorer_id: 0, adapter_id: 0, num_rounds: 1, round_mode: 'agent',
   })
-
-  function toggleExtraScorer(id: number) {
-    const cur = form.scorer_ids ?? []
-    setForm({ ...form, scorer_ids: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] })
-  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -86,21 +81,9 @@ export default function RunsPage() {
             </select>
           )}
           <button type="submit" className={styles.btn} disabled={createMut.isPending || form.dataset_id === 0 || form.scorer_id === 0 || form.adapter_id === 0}>Create Run</button>
-          {scorers && scorers.length > 1 && (
-            <div style={{ flexBasis: '100%', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 4 }}>
-              <span style={{ fontSize: 12, color: '#666' }}>Extra scorers (AE-13):</span>
-              {scorers.filter(s => s.id !== form.scorer_id).map(s => {
-                const on = (form.scorer_ids ?? []).includes(s.id)
-                return (
-                  <button type="button" key={s.id} onClick={() => toggleExtraScorer(s.id)}
-                    style={{ padding: '2px 8px', fontSize: 12, borderRadius: 12, cursor: 'pointer',
-                      border: '1px solid #ccc', background: on ? '#0a66c2' : '#fff', color: on ? '#fff' : '#333' }}>
-                    {s.name}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          <small style={{ flexBasis: '100%', color: '#666', fontSize: 11 }}>
+            Tip: pin extra scorers per case on the dataset page. The scorer above is the default for cases without a pin.
+          </small>
         </form>
       )}
 
