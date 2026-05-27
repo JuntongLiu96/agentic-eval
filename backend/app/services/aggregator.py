@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.dataset import TestCase
 from app.models.eval_result import EvalResult
+from app.models.scorer import Scorer
 
 
 def extract_score(score_data: Any) -> float | None:
@@ -251,4 +252,53 @@ async def per_quadrant_summary(
             entry["min_score"] = round(min(scores), 2)
             entry["max_score"] = round(max(scores), 2)
         out[lbl] = entry
+    return out
+
+
+async def per_scorer_summary(
+    run_id: int, db: AsyncSession,
+) -> dict[str, dict[str, Any]]:
+    """AE-13: bucket results by scorer_id so multi-scorer-per-run aggregates
+    show one trust signal per scorer (sample size = how many cases that scorer
+    judged in this run). Mirrors ``per_quadrant_summary`` shape.
+
+    Rows with NULL scorer_id (legacy pre-AE-13) are bucketed under "unknown".
+    """
+    result = await db.execute(select(EvalResult).where(EvalResult.run_id == run_id))
+    all_results = result.scalars().all()
+    if not all_results:
+        return {}
+
+    scorer_ids = list({r.scorer_id for r in all_results if r.scorer_id is not None})
+    name_map: dict[int, str] = {}
+    if scorer_ids:
+        sres = await db.execute(select(Scorer).where(Scorer.id.in_(scorer_ids)))
+        name_map = {s.id: s.name for s in sres.scalars().all()}
+
+    buckets: dict[str, dict[str, Any]] = {}
+    for r in all_results:
+        key = name_map.get(r.scorer_id, f"scorer:{r.scorer_id}") if r.scorer_id else "unknown"
+        b = buckets.setdefault(key, {"scorer_id": r.scorer_id, "total": 0, "passed": 0, "_scores": []})
+        b["total"] += 1
+        if r.passed:
+            b["passed"] += 1
+        s = _extract_score(r.score)
+        if s is not None:
+            b["_scores"].append(s)
+
+    out: dict[str, dict[str, Any]] = {}
+    for name, b in buckets.items():
+        total = b["total"]
+        scores = b.pop("_scores")
+        entry: dict[str, Any] = {
+            "scorer_id": b["scorer_id"],
+            "total": total,
+            "passed": b["passed"],
+            "pass_rate": round(b["passed"] / total * 100, 1) if total else 0.0,
+        }
+        if scores:
+            entry["avg_score"] = round(sum(scores) / len(scores), 2)
+            entry["min_score"] = round(min(scores), 2)
+            entry["max_score"] = round(max(scores), 2)
+        out[name] = entry
     return out

@@ -25,9 +25,11 @@ def main(base_url: str = typer.Option("http://localhost:9100", "--base-url", "-u
 @app.command("run")
 def run_eval(
     dataset: int = typer.Option(..., "--dataset", "-d", help="Dataset ID"),
-    scorer: int = typer.Option(..., "--scorer", "-s", help="Scorer ID"),
+    scorer: int = typer.Option(..., "--scorer", "-s", help="Scorer ID (default)"),
     adapter: int = typer.Option(..., "--adapter", "-a", help="Adapter ID"),
     name: str = typer.Option("", "--name", "-n", help="Optional run name"),
+    extra_scorers: str = typer.Option("", "--scorer-ids",
+                                       help="AE-13: comma-separated extra scorer IDs"),
     judge_config_json: str = typer.Option("{}", "--judge-config",
                                           help="Judge config as JSON string"),
     num_rounds: int = typer.Option(1, "--num-rounds", "-r", help="Number of rounds (default: 1)"),
@@ -36,8 +38,14 @@ def run_eval(
     """Create and immediately start an eval run (shortcut)."""
     client = ApiClient(base_url=state["base_url"])
     judge_config = parse_json_arg(judge_config_json, "--judge-config")
+    scorer_ids: list[int] = []
+    if extra_scorers.strip():
+        try:
+            scorer_ids = [int(x.strip()) for x in extra_scorers.split(",") if x.strip()]
+        except ValueError:
+            raise typer.BadParameter("--scorer-ids must be a comma-separated list of integers")
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
-               "name": name, "judge_config": judge_config,
+               "name": name, "scorer_ids": scorer_ids, "judge_config": judge_config,
                "num_rounds": num_rounds, "round_mode": round_mode}
     r = client.post("/api/runs", json=payload)
     run_id = r["id"]

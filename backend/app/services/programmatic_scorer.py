@@ -36,11 +36,16 @@ VALID_OPS = {"==", "!=", ">", ">=", "<", "<=", "in", "not_in"}
 
 
 def _resolve_path(path: str, agent_metadata: dict[str, Any],
-                  agent_messages: list[dict[str, Any]] | None = None) -> Any:
+                  agent_messages: list[dict[str, Any]] | None = None,
+                  testcase_metadata: dict[str, Any] | None = None,
+                  expected_result: Any = None) -> Any:
     """Resolve ``agent_metadata.foo.bar`` against the provided context.
 
     Returns ``None`` when any segment is missing — comparisons against None
     naturally evaluate to False under ``>``/``>=``/``<``/``<=``.
+
+    AE-12: also supports ``testcase_metadata.*`` and ``expected_result.*`` roots
+    so per-case thresholds and assertions can live in the testcase row.
     """
     if not path:
         return None
@@ -50,6 +55,10 @@ def _resolve_path(path: str, agent_metadata: dict[str, Any],
         cursor: Any = agent_metadata
     elif root_name == "messages":
         cursor = agent_messages
+    elif root_name == "testcase_metadata":
+        cursor = testcase_metadata
+    elif root_name == "expected_result":
+        cursor = expected_result
     else:
         return None
     for seg in rest:
@@ -129,11 +138,18 @@ def evaluate_programmatic(
     scorer: Any,
     agent_metadata: dict[str, Any],
     agent_messages: list[dict[str, Any]] | None = None,
+    testcase_metadata: dict[str, Any] | None = None,
+    expected_result: Any = None,
 ) -> dict[str, Any]:
     """Evaluate the scorer's rules against agent_metadata.
 
     Returns the same {score, passed, justification} shape that LLM judges produce,
     so the orchestrator can persist it identically.
+
+    AE-12: ``testcase_metadata`` and ``expected_result`` are passed through so
+    rules can reference per-case data via ``testcase_metadata.*`` /
+    ``expected_result.*`` paths, and ``rule.path_value`` can resolve the
+    comparison target from the testcase row (e.g. per-case thresholds).
     """
     rules, threshold = _load_rules(scorer)
     if threshold is None:
@@ -152,8 +168,15 @@ def evaluate_programmatic(
                                   "reason": f"unsupported op: {op}"})
             continue
         path = rule.get("path", "")
-        observed = _resolve_path(path, agent_metadata, agent_messages)
-        expected = rule.get("value")
+        observed = _resolve_path(path, agent_metadata, agent_messages,
+                                 testcase_metadata, expected_result)
+        # AE-12: prefer path_value (resolved from testcase row) over literal value.
+        if "path_value" in rule:
+            expected = _resolve_path(rule["path_value"], agent_metadata,
+                                     agent_messages, testcase_metadata,
+                                     expected_result)
+        else:
+            expected = rule.get("value")
         ok = _apply(op, observed, expected)
         rule_outcomes.append({
             "id": rule_id, "passed": ok, "op": op,

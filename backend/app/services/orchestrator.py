@@ -45,6 +45,7 @@ async def _run_judge(
     judge_client: Any, scorer: Scorer, expected: Any,
     agent_messages: list, sub_agent_messages: list | None,
     agent_metadata: dict[str, Any] | None = None,
+    testcase_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble judge prompt, call LLM, parse response.
 
@@ -52,6 +53,10 @@ async def _run_judge(
     instead of calling an LLM at all.
     AE-2: ``agent_metadata`` is forwarded into the judge prompt for LLM scorers
     and is the *sole* input for programmatic scorers.
+    AE-12: ``testcase_metadata`` (and ``expected``) are forwarded so a single
+    generic scorer can read case-specific data — via ``{{testcase_metadata}}``
+    / ``{{expected_result}}`` template variables for LLM judges, or via
+    ``testcase_metadata.*`` / ``expected_result.*`` paths in programmatic rules.
     """
     scorer_type = getattr(scorer, "scorer_type", None) or "llm_judge"
     if scorer_type == "programmatic":
@@ -60,6 +65,8 @@ async def _run_judge(
             scorer=scorer,
             agent_metadata=agent_metadata or {},
             agent_messages=agent_messages,
+            testcase_metadata=testcase_metadata or {},
+            expected_result=expected,
         )
     if scorer_type == "series":
         # AE-6: series scorers operate over multi-round metadata. When invoked
@@ -73,6 +80,7 @@ async def _run_judge(
         agent_messages=agent_messages,
         sub_agent_messages=sub_agent_messages or None,
         agent_metadata=agent_metadata,
+        testcase_metadata=testcase_metadata,
     )
     judge_response = await judge_client.chat(judge_messages)
     return parse_judge_response(judge_response, scorer.pass_threshold)
@@ -92,6 +100,21 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
     scorer = await db.get(Scorer, run.scorer_id)
     if not scorer:
         yield {"type": "error", "message": "Scorer not found"}; return
+    # AE-13: optional extra scorers (multi-scorer-per-run). Build a map so the
+    # per-case dispatcher can resolve scorer ids cheaply. The run's default
+    # ``scorer`` is always included.
+    scorer_map: dict[int, Scorer] = {scorer.id: scorer}
+    try:
+        extra_ids = json.loads(run.scorer_ids) if isinstance(run.scorer_ids, str) else (run.scorer_ids or [])
+    except (json.JSONDecodeError, TypeError):
+        extra_ids = []
+    if isinstance(extra_ids, list):
+        for sid in extra_ids:
+            if not isinstance(sid, int) or sid in scorer_map:
+                continue
+            extra = await db.get(Scorer, sid)
+            if extra:
+                scorer_map[extra.id] = extra
     adapter_row = await db.get(Adapter, run.adapter_id)
     if not adapter_row:
         yield {"type": "error", "message": "Adapter not found"}; return
@@ -133,10 +156,10 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
 
         try:
             if round_mode == "scorer":
-                async for event in _run_scorer_mode(run, scorer, bridge, judge_client, test_cases, num_rounds, db):
+                async for event in _run_scorer_mode(run, scorer, scorer_map, bridge, judge_client, test_cases, num_rounds, db):
                     yield event
             else:
-                async for event in _run_agent_mode(run, scorer, bridge, judge_client, test_cases, num_rounds, db):
+                async for event in _run_agent_mode(run, scorer, scorer_map, bridge, judge_client, test_cases, num_rounds, db):
                     yield event
         except Exception as e:
             logger.exception(f"Run #{run_id} failed during evaluation: {e}")
@@ -164,7 +187,7 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
 
 
 async def _run_agent_mode(
-    run: EvalRun, scorer: Scorer, bridge: Any, judge_client: Any,
+    run: EvalRun, scorer: Scorer, scorer_map: dict[int, Scorer], bridge: Any, judge_client: Any,
     test_cases: list, num_rounds: int, db: AsyncSession,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Agent mode: re-run full agent + judge pipeline each round."""
@@ -172,7 +195,7 @@ async def _run_agent_mode(
         yield {"type": "round_started", "round": rnd, "total_rounds": num_rounds}
         for i, tc in enumerate(test_cases):
             async for event in _eval_single_case(
-                run, scorer, bridge, judge_client, tc, i, len(test_cases), rnd, num_rounds,
+                run, scorer, scorer_map, bridge, judge_client, tc, i, len(test_cases), rnd, num_rounds,
                 run_agent=True, cached_agent_result=None, db=db,
             ):
                 yield event
@@ -180,7 +203,7 @@ async def _run_agent_mode(
 
 
 async def _run_scorer_mode(
-    run: EvalRun, scorer: Scorer, bridge: Any, judge_client: Any,
+    run: EvalRun, scorer: Scorer, scorer_map: dict[int, Scorer], bridge: Any, judge_client: Any,
     test_cases: list, num_rounds: int, db: AsyncSession,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Scorer mode: run agent once (round 0), then judge N times."""
@@ -254,7 +277,7 @@ async def _run_scorer_mode(
         for i, tc in enumerate(test_cases):
             cached = cached_results.get(tc.id)
             async for event in _eval_single_case(
-                run, scorer, bridge, judge_client, tc, i, len(test_cases), rnd, num_rounds,
+                run, scorer, scorer_map, bridge, judge_client, tc, i, len(test_cases), rnd, num_rounds,
                 run_agent=False, cached_agent_result=cached, db=db,
             ):
                 yield event
@@ -262,15 +285,39 @@ async def _run_scorer_mode(
 
 
 async def _eval_single_case(
-    run: EvalRun, scorer: Scorer, bridge: Any, judge_client: Any,
+    run: EvalRun, scorer: Scorer, scorer_map: dict[int, Scorer], bridge: Any, judge_client: Any,
     tc: Any, case_index: int, total_cases: int, round_number: int, total_rounds: int,
     run_agent: bool, cached_agent_result: dict | None, db: AsyncSession,
 ) -> AsyncGenerator[dict[str, Any], None]:
-    """Evaluate a single test case (single-turn or multi-turn) for a single round."""
+    """Evaluate a single test case (single-turn or multi-turn) for a single round.
+
+    AE-13: a case may be scored by multiple scorers. Resolution order:
+      1. ``case_metadata.scorer_ids`` (list[int]) — explicit per-case override
+      2. ``case_metadata.scorer_id`` (int) — single per-case override
+      3. all scorers in ``scorer_map`` (run default + AE-13 extras)
+    One ``EvalResult`` row is persisted per (case, round, scorer).
+    """
     test_data = json.loads(tc.data) if isinstance(tc.data, str) else tc.data
     expected = json.loads(tc.expected_result) if isinstance(tc.expected_result, str) else tc.expected_result
     # AE-3: forward TestCase.metadata to the bridge (case_id, scope, phase, round_idx, ...)
     case_metadata = _parse_case_metadata(tc)
+
+    # AE-13: resolve which scorer(s) apply to this case.
+    case_scorer_ids = case_metadata.get("scorer_ids")
+    if not (isinstance(case_scorer_ids, list) and case_scorer_ids):
+        single = case_metadata.get("scorer_id")
+        case_scorer_ids = [single] if isinstance(single, int) else list(scorer_map.keys())
+    scorers_for_case: list[Scorer] = []
+    for sid in case_scorer_ids:
+        s = scorer_map.get(sid)
+        if s is None:
+            s = await db.get(Scorer, sid)
+            if s:
+                scorer_map[s.id] = s
+        if s:
+            scorers_for_case.append(s)
+    if not scorers_for_case:
+        scorers_for_case = [scorer]
 
     logger.info(f"Run #{run.id} round {round_number} case {case_index + 1}/{total_cases}: {tc.name}")
     yield {"type": "case_started", "round": round_number, "case_index": case_index,
@@ -282,12 +329,14 @@ async def _eval_single_case(
         try:
             turns = parse_turns(test_data)
         except ValueError as e:
-            eval_result = EvalResult(
-                run_id=run.id, test_case_id=tc.id, round_number=round_number,
-                agent_messages=json.dumps([]), score=json.dumps({}),
-                judge_reasoning=f"Invalid test data: {e}", passed=False, duration_ms=0,
-            )
-            db.add(eval_result); await db.commit()
+            for s in scorers_for_case:
+                eval_result = EvalResult(
+                    run_id=run.id, test_case_id=tc.id, scorer_id=s.id, round_number=round_number,
+                    agent_messages=json.dumps([]), score=json.dumps({}),
+                    judge_reasoning=f"Invalid test data: {e}", passed=False, duration_ms=0,
+                )
+                db.add(eval_result)
+            await db.commit()
             yield {"type": "case_completed", "round": round_number, "case_name": tc.name,
                    "passed": False, "error": str(e)}
             return
@@ -315,14 +364,16 @@ async def _eval_single_case(
             if not agent_result.success:
                 logger.warning(f"Run #{run.id} round {round_number} case {tc.name} turn {turn_index}: "
                                f"agent failed — {agent_result.error}")
-                eval_result = EvalResult(
-                    run_id=run.id, test_case_id=tc.id, round_number=round_number,
-                    agent_messages=json.dumps(all_messages), score=json.dumps({}),
-                    judge_reasoning=f"Agent error at turn {turn_index}: {agent_result.error}",
-                    passed=False, duration_ms=int((time.monotonic() - start_time) * 1000),
-                    turn_results=json.dumps(turn_results_list) if turn_results_list else None,
-                )
-                db.add(eval_result); await db.commit()
+                for s in scorers_for_case:
+                    eval_result = EvalResult(
+                        run_id=run.id, test_case_id=tc.id, scorer_id=s.id, round_number=round_number,
+                        agent_messages=json.dumps(all_messages), score=json.dumps({}),
+                        judge_reasoning=f"Agent error at turn {turn_index}: {agent_result.error}",
+                        passed=False, duration_ms=int((time.monotonic() - start_time) * 1000),
+                        turn_results=json.dumps(turn_results_list) if turn_results_list else None,
+                    )
+                    db.add(eval_result)
+                await db.commit()
                 yield {"type": "case_completed", "round": round_number, "case_name": tc.name,
                        "passed": False, "error": agent_result.error}
                 return
@@ -346,6 +397,7 @@ async def _eval_single_case(
                         judge_client, scorer, turn["expected_result"],
                         all_messages, all_sub_messages or None,
                         agent_metadata=accumulated_metadata,
+                        testcase_metadata=case_metadata,
                     )
                     turn_results_list.append({
                         "turn_index": turn_index,
@@ -377,12 +429,14 @@ async def _eval_single_case(
         final_result = _FinalResult()
     else:
         if cached_agent_result is None:
-            eval_result = EvalResult(
-                run_id=run.id, test_case_id=tc.id, round_number=round_number,
-                agent_messages=json.dumps([]), score=json.dumps({}),
-                judge_reasoning="No cached agent result", passed=False, duration_ms=0,
-            )
-            db.add(eval_result); await db.commit()
+            for s in scorers_for_case:
+                eval_result = EvalResult(
+                    run_id=run.id, test_case_id=tc.id, scorer_id=s.id, round_number=round_number,
+                    agent_messages=json.dumps([]), score=json.dumps({}),
+                    judge_reasoning="No cached agent result", passed=False, duration_ms=0,
+                )
+                db.add(eval_result)
+            await db.commit()
             yield {"type": "case_completed", "round": round_number, "case_name": tc.name,
                    "passed": False, "error": "No cached agent result"}
             return
@@ -392,34 +446,41 @@ async def _eval_single_case(
         all_sub_messages = final_result.sub_agent_messages if hasattr(final_result, 'sub_agent_messages') else []
         turn_results_list = cached_agent_result.get("turn_results", [])
 
-    try:
-        # AE-2: feed accumulated agent metadata to the scorer.
-        final_metadata = getattr(final_result, "metadata", None) or {}
-        parsed = await _run_judge(judge_client, scorer, expected,
-                                   all_messages, all_sub_messages or None,
-                                   agent_metadata=final_metadata)
-        logger.info(f"Run #{run.id} round {round_number} case {tc.name}: "
-                     f"score={parsed['score']}, passed={parsed['passed']}")
-        all_msg_obj = _build_all_messages(final_result)
-        total_duration = int((time.monotonic() - start_time) * 1000) if run_agent else agent_duration
-        eval_result = EvalResult(
-            run_id=run.id, test_case_id=tc.id, round_number=round_number,
-            agent_messages=json.dumps(all_msg_obj), score=json.dumps(parsed["score"]),
-            judge_reasoning=parsed["justification"], passed=parsed["passed"],
-            duration_ms=total_duration,
-            turn_results=json.dumps(turn_results_list) if turn_results_list else None,
-        )
-    except Exception as e:
-        logger.error(f"Run #{run.id} round {round_number} case {tc.name}: judge error — {e}")
-        eval_result = EvalResult(
-            run_id=run.id, test_case_id=tc.id, round_number=round_number,
-            agent_messages=json.dumps(all_messages), score=json.dumps({}),
-            judge_reasoning=f"Judge error: {e}", passed=False,
-            duration_ms=int((time.monotonic() - start_time) * 1000),
-            turn_results=json.dumps(turn_results_list) if turn_results_list else None,
-        )
+    final_metadata = getattr(final_result, "metadata", None) or {}
+    all_msg_obj = _build_all_messages(final_result)
+    total_duration = int((time.monotonic() - start_time) * 1000) if run_agent else agent_duration
 
-    db.add(eval_result); await db.commit()
+    any_passed = False
+    last_justification = ""
+    for s in scorers_for_case:
+        try:
+            parsed = await _run_judge(judge_client, s, expected,
+                                       all_messages, all_sub_messages or None,
+                                       agent_metadata=final_metadata,
+                                       testcase_metadata=case_metadata)
+            logger.info(f"Run #{run.id} round {round_number} case {tc.name} scorer #{s.id}: "
+                         f"score={parsed['score']}, passed={parsed['passed']}")
+            eval_result = EvalResult(
+                run_id=run.id, test_case_id=tc.id, scorer_id=s.id, round_number=round_number,
+                agent_messages=json.dumps(all_msg_obj), score=json.dumps(parsed["score"]),
+                judge_reasoning=parsed["justification"], passed=parsed["passed"],
+                duration_ms=total_duration,
+                turn_results=json.dumps(turn_results_list) if turn_results_list else None,
+            )
+            any_passed = any_passed or bool(parsed["passed"])
+            last_justification = parsed["justification"]
+        except Exception as e:
+            logger.error(f"Run #{run.id} round {round_number} case {tc.name} scorer #{s.id}: judge error — {e}")
+            eval_result = EvalResult(
+                run_id=run.id, test_case_id=tc.id, scorer_id=s.id, round_number=round_number,
+                agent_messages=json.dumps(all_messages), score=json.dumps({}),
+                judge_reasoning=f"Judge error: {e}", passed=False,
+                duration_ms=int((time.monotonic() - start_time) * 1000),
+                turn_results=json.dumps(turn_results_list) if turn_results_list else None,
+            )
+            last_justification = f"Judge error: {e}"
+        db.add(eval_result)
+    await db.commit()
     yield {"type": "case_completed", "round": round_number, "case_index": case_index,
-           "case_name": tc.name, "passed": eval_result.passed,
-           "justification": eval_result.judge_reasoning}
+           "case_name": tc.name, "passed": any_passed,
+           "justification": last_justification}

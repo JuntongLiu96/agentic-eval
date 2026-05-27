@@ -18,7 +18,7 @@ from app.models.eval_run import EvalRun, RunStatus
 from app.models.scorer import Scorer
 from app.schemas.eval_result import EvalResultResponse
 from app.schemas.eval_run import EvalRunCreate, EvalRunResponse
-from app.services.aggregator import aggregate_run_results, extract_score, multi_round_summary, multi_round_per_tc_summary, per_quadrant_summary
+from app.services.aggregator import aggregate_run_results, extract_score, multi_round_summary, multi_round_per_tc_summary, per_quadrant_summary, per_scorer_summary
 from app.services.orchestrator import run_eval
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -39,10 +39,15 @@ async def create_run(payload: EvalRunCreate, db: AsyncSession = Depends(get_db))
     await db_get_or_404(Dataset, payload.dataset_id, db, detail="Dataset not found")
     await db_get_or_404(Scorer, payload.scorer_id, db, detail="Scorer not found")
     await db_get_or_404(Adapter, payload.adapter_id, db, detail="Adapter not found")
+    # AE-13: validate extra scorers exist
+    extra_ids = [sid for sid in (payload.scorer_ids or []) if sid != payload.scorer_id]
+    for sid in extra_ids:
+        await db_get_or_404(Scorer, sid, db, detail=f"Scorer {sid} not found")
 
     run = EvalRun(
         name=payload.name, dataset_id=payload.dataset_id,
         scorer_id=payload.scorer_id, adapter_id=payload.adapter_id,
+        scorer_ids=json.dumps(extra_ids),
         judge_config=json.dumps(payload.judge_config),
         num_rounds=payload.num_rounds,
         round_mode=payload.round_mode,
@@ -216,18 +221,28 @@ async def get_run_summary(run_id: int, db: AsyncSession = Depends(get_db)):
     scorer = await db.get(Scorer, run.scorer_id)
     pass_threshold = scorer.pass_threshold if scorer and scorer.pass_threshold is not None else 60.0
     by_quadrant = await per_quadrant_summary(run_id, pass_threshold, db)
+    by_scorer = await per_scorer_summary(run_id, db)
     if run.num_rounds <= 1:
         summary = await aggregate_run_results(run_id, db)
         return {"num_rounds": 1, "round_mode": run.round_mode,
                 "round_summaries": [{"round": 1, **summary}],
                 "averaged": {"round": 0, **summary},
                 "tc_averaged": [],
-                "by_quadrant": by_quadrant}
+                "by_quadrant": by_quadrant,
+                "by_scorer": by_scorer}
     result = await multi_round_summary(run_id, run.num_rounds, run.round_mode, pass_threshold, db)
     tc_averaged = await multi_round_per_tc_summary(run_id, run.num_rounds, pass_threshold, db)
     result["tc_averaged"] = tc_averaged
     result["by_quadrant"] = by_quadrant
+    result["by_scorer"] = by_scorer
     return result
+
+
+@router.get("/runs/{run_id}/per-scorer")
+async def get_run_per_scorer(run_id: int, db: AsyncSession = Depends(get_db)):
+    """AE-13: per-scorer aggregates for a multi-scorer run."""
+    await db_get_or_404(EvalRun, run_id, db, detail="Run not found")
+    return await per_scorer_summary(run_id, db)
 
 
 @router.get("/runs/{run_id}/results", response_model=list[EvalResultResponse])

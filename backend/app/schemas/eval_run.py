@@ -8,6 +8,7 @@ class EvalRunCreate(BaseModel):
     name: str = ""
     dataset_id: int
     scorer_id: int
+    scorer_ids: list[int] = []  # AE-13: extra scorers run alongside scorer_id
     adapter_id: int
     judge_config: dict[str, Any] = {"use_target_llm": True}
     num_rounds: int = 1
@@ -18,6 +19,7 @@ class EvalRunResponse(BaseModel):
     name: str
     dataset_id: int
     scorer_id: int
+    scorer_ids: list[int] = []  # AE-13
     adapter_id: int
     judge_config: dict[str, Any]
     num_rounds: int
@@ -32,3 +34,9 @@ class EvalRunResponse(BaseModel):
     @classmethod
     def parse_json(cls, v: Any) -> Any:
         return parse_json_if_str(v)
+
+    @field_validator("scorer_ids", mode="before")
+    @classmethod
+    def parse_scorer_ids(cls, v: Any) -> Any:
+        v = parse_json_if_str(v)
+        return v if isinstance(v, list) else []

@@ -37,3 +37,10 @@ async def init_db():
         await conn.run_sync(
             lambda sync_conn: _migrate_add_column(sync_conn, "eval_results", "turn_results", "TEXT", "NULL")
         )
+        # AE-13: multi-scorer-per-run
+        await conn.run_sync(
+            lambda sync_conn: _migrate_add_column(sync_conn, "eval_runs", "scorer_ids", "TEXT", "'[]'")
+        )
+        await conn.run_sync(
+            lambda sync_conn: _migrate_add_column(sync_conn, "eval_results", "scorer_id", "INTEGER", "NULL")
+        )

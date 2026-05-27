@@ -16,6 +16,12 @@ class EvalRun(Base):
     name: Mapped[str] = mapped_column(String(255), default="")
     dataset_id: Mapped[int] = mapped_column(Integer, ForeignKey("datasets.id"), nullable=False)
     scorer_id: Mapped[int] = mapped_column(Integer, ForeignKey("scorers.id"), nullable=False)
+    # AE-13: optional additional scorers for multi-scorer-per-run dispatch. JSON
+    # array of scorer ids. Empty/"[]" → single-scorer (legacy) behavior using
+    # ``scorer_id`` alone. When set, the orchestrator runs every listed scorer
+    # against every case (unless the case pins its own scorer via
+    # ``TestCase.metadata.scorer_id`` / ``scorer_ids``).
+    scorer_ids: Mapped[str] = mapped_column(Text, default="[]")
     adapter_id: Mapped[int] = mapped_column(Integer, ForeignKey("adapters.id"), nullable=False)
     judge_config: Mapped[str] = mapped_column(Text, default='{"use_target_llm": true}')
     num_rounds: Mapped[int] = mapped_column(Integer, default=1)

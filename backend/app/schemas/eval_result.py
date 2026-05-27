@@ -8,6 +8,7 @@ class EvalResultResponse(BaseModel):
     run_id: int
     test_case_id: int
     test_case_name: str = ""
+    scorer_id: int | None = None  # AE-13
     round_number: int = 1
     agent_messages: Any  # list[dict] or {"main": [...], "sub_agents": [...]}
     score: Any

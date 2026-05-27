@@ -4,6 +4,8 @@ The `eval_prompt` is the instruction given to the judge model. It determines how
 
 AgenticEval supports two scoring formats. Choose the one that fits your evaluation needs.
 
+> **Template variables (AE-12).** Any `eval_prompt` may include `{{agent_metadata}}`, `{{expected_result}}`, and `{{testcase_metadata}}` placeholders. They are substituted with the JSON-encoded values for the current case just before the prompt is sent to the judge — so a single shared scorer can carry per-case assertions in the testcase row instead of being duplicated per case.
+
 ---
 
 ## Format 1: Standard Scoring (Continuous)

@@ -7,6 +7,9 @@ class EvalResult(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(Integer, ForeignKey("eval_runs.id"), nullable=False)
     test_case_id: Mapped[int] = mapped_column(Integer, ForeignKey("test_cases.id"), nullable=False)
+    # AE-13: records which scorer produced this result. Nullable for backward
+    # compatibility with pre-AE-13 rows; new rows always populate it.
+    scorer_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("scorers.id"), nullable=True, default=None)
     round_number: Mapped[int] = mapped_column(Integer, default=1)
     agent_messages: Mapped[str] = mapped_column(Text, default="[]")
     score: Mapped[str] = mapped_column(Text, default="{}")

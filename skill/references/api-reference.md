@@ -65,11 +65,12 @@ For multi-turn support, the agent's `/eval/run` endpoint must:
 | Method | Endpoint | Body / Params | Returns |
 |--------|----------|---------------|---------|
 | `GET` | `/api/runs` | — | `[{id, name, status, dataset_id, scorer_id, adapter_id, created_at}]` |
-| `POST` | `/api/runs` | `{dataset_id, scorer_id, adapter_id, name?, num_rounds?, round_mode?}` | `{id, name, status: "pending", num_rounds, round_mode}` |
+| `POST` | `/api/runs` | `{dataset_id, scorer_id, adapter_id, name?, scorer_ids?, num_rounds?, round_mode?}` | `{id, name, status: "pending", num_rounds, round_mode}` |
 | `GET` | `/api/runs/{id}` | — | `{id, status, started_at, finished_at, ...}` |
 | `POST` | `/api/runs/{id}/start` | — | Synchronous. Returns when complete. `{id, status: "completed"}` |
-| `GET` | `/api/runs/{id}/results` | `?round=N` (optional) | `[{testcase_id, round_number, score, passed, judge_reasoning, duration_seconds}]` |
-| `GET` | `/api/runs/{id}/summary` | — | `{num_rounds, round_mode, round_summaries: [...], averaged: {...}, by_quadrant?: {...}}` |
+| `GET` | `/api/runs/{id}/results` | `?round=N` (optional) | `[{testcase_id, scorer_id, round_number, score, passed, judge_reasoning, duration_seconds}]` |
+| `GET` | `/api/runs/{id}/summary` | — | `{num_rounds, round_mode, round_summaries: [...], averaged: {...}, by_quadrant?: {...}, by_scorer?: {...}}` |
+| `GET` | `/api/runs/{id}/per-scorer` | — | **AE-13**: `{<scorer_name>: {scorer_id, total, passed, pass_rate, avg_score?}}` |
 | `GET` | `/api/runs/compare` | `?run1_id=X&run2_id=Y` | Per-testcase comparison with deltas |
 | `POST` | `/api/runs/comparison` | `{baseline_run_id, warm_run_id, metrics?}` | **AE-5**: paired cold/warm metric deltas (`n_reduction` etc.) per test case |
 | `GET` | `/api/runs/{id}/stream` | — | Server-Sent Events: `run_started`, `round_started`, `phase_started`, `case_started`, `turn_completed`, `case_completed`, `round_completed`, `run_completed`, `error` |
@@ -99,8 +100,24 @@ Document shape: `{name, description?, target_type?, tags?, rows: [{name, data, e
 |---|---|
 | `llm_judge` | Default — LLM grades the messages against `eval_prompt`. |
 | `boolean_rubric` | LLM returns a structured rubric (`items`, `dimensions`, `verdict`). |
-| `programmatic` (AE-1) | Deterministic rule eval against `agent_metadata`. `config = {rules: [{path, op, value}], pass_threshold}`. No LLM call. |
+| `programmatic` (AE-1) | Deterministic rule eval against `agent_metadata`. `config = {rules: [{path, op, value | path_value}], pass_threshold}`. No LLM call. AE-12: `path` and `path_value` can resolve `agent_metadata.*`, `messages.*`, `testcase_metadata.*`, `expected_result.*`. |
 | `series` (AE-6) | Cross-round assertions: `monotonic_increasing`, `monotonic_decreasing`, `equals`, `delta_at_least`. |
+
+## Scorer template variables (AE-12)
+
+LLM-judge and `boolean_rubric` `eval_prompt` strings support these substitutions, rendered just before the prompt is sent:
+
+| Variable | Source |
+|---|---|
+| `{{agent_metadata}}` | bridge-returned `agent_metadata` for this case |
+| `{{expected_result}}` | `TestCase.expected_result` |
+| `{{testcase_metadata}}` | `TestCase.metadata` |
+
+This lets one generic scorer evaluate many cases with case-specific assertions (e.g. "the agent must touch every path in `{{testcase_metadata.must_touch}}`") instead of one bespoke scorer per case.
+
+## Multi-scorer-per-run (AE-13)
+
+`POST /api/runs` accepts an optional `scorer_ids: [int]`. Each listed scorer (plus `scorer_id`, the default) is run against every case, producing one `EvalResult` row per (case, round, scorer). A case may also pin its own scorer set via `TestCase.metadata.scorer_id` (int) or `TestCase.metadata.scorer_ids` (list[int]) — when set, only those scorers run for that case. `GET /api/runs/{id}/per-scorer` returns per-scorer aggregates so each scorer accumulates its own trust signal (sample size = cases judged).
 
 ## Per-quadrant aggregation (AE-7)
 

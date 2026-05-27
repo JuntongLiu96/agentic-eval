@@ -57,7 +57,8 @@ def resolve_judge_llm(judge_config: dict[str, Any], adapter_llm: LLMClient | Non
 def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
                           agent_messages: list[dict[str, Any]],
                           sub_agent_messages: list[dict[str, Any]] | None = None,
-                          agent_metadata: dict[str, Any] | None = None) -> list[dict[str, str]]:
+                          agent_metadata: dict[str, Any] | None = None,
+                          testcase_metadata: dict[str, Any] | None = None) -> list[dict[str, str]]:
     """Assemble the judge prompt from the scorer's eval_prompt, expected result, and agent output.
 
     The eval_prompt contains everything: scoring criteria, score range, and scoring rules.
@@ -66,6 +67,11 @@ def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
     retrieval/usage signals, etc). It is exposed to the eval_prompt as the
     ``{{agent_metadata}}`` template variable and also rendered as a dedicated
     section so unparameterised prompts can still see it.
+
+    AE-12: ``testcase_metadata`` and ``expected_result`` are likewise exposed as
+    ``{{testcase_metadata}}`` and ``{{expected_result}}`` template variables so a
+    single generic scorer can serve many cases with case-specific assertions
+    (must_touch paths, must_present/absent strings, pass_criteria thresholds).
     """
     sub_agent_section = ""
     if sub_agent_messages:
@@ -75,10 +81,16 @@ def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
 {json.dumps(sub_agent_messages, indent=2)}
 """
 
-    # AE-2: render the {{agent_metadata}} template variable before assembling the
-    # user message so scorer authors can place it wherever they want in the prompt.
+    # AE-2 / AE-12: render the {{...}} template variables before assembling the
+    # user message so scorer authors can place them wherever they want in the
+    # prompt.
     rendered_metadata = json.dumps(agent_metadata or {}, indent=2)
-    eval_prompt = eval_prompt.replace("{{agent_metadata}}", rendered_metadata)
+    rendered_tc_metadata = json.dumps(testcase_metadata or {}, indent=2)
+    rendered_expected = json.dumps(expected_result, indent=2)
+    eval_prompt = (eval_prompt
+                   .replace("{{agent_metadata}}", rendered_metadata)
+                   .replace("{{testcase_metadata}}", rendered_tc_metadata)
+                   .replace("{{expected_result}}", rendered_expected))
 
     metadata_section = ""
     if agent_metadata:
@@ -92,7 +104,7 @@ def assemble_judge_prompt(eval_prompt: str, expected_result: Any,
 {eval_prompt}
 
 ## Expected Result
-{json.dumps(expected_result, indent=2)}
+{rendered_expected}
 
 ## Agent Output (main agent message list)
 {json.dumps(agent_messages, indent=2)}

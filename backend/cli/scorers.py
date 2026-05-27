@@ -69,19 +69,26 @@ def get_scorer(scorer_id: int = typer.Argument(..., help="Scorer ID")):
 def create_scorer(
     name: str = typer.Option(None, "--name", "-n", help="Scorer name"),
     eval_prompt: str = typer.Option(None, "--eval-prompt", "-p",
-                                     help="Evaluation prompt (includes criteria and score rules)"),
+                                     help="Evaluation prompt (llm_judge only)"),
     description: str = typer.Option(None, "--description", "-d", help="Description"),
     pass_threshold: float = typer.Option(None, "--threshold", "-t", help="Pass threshold (score >= this = pass)"),
     tags: str = typer.Option(None, "--tags", help="Comma-separated tags"),
-    file: str = typer.Option(None, "--file", "-f", help="JSON file with scorer definition (name, eval_prompt, etc.)"),
+    scorer_type: str = typer.Option(None, "--scorer-type",
+                                    help="llm_judge | boolean_rubric | programmatic | series"),
+    file: str = typer.Option(None, "--file", "-f", help="JSON file with scorer definition"),
 ):
-    """Create a new scorer. Use --file to load from a JSON file, or pass fields as options."""
-    # Start from file if provided, then overlay CLI options
+    """Create a new scorer. Use --file to load from a JSON file, or pass fields as options.
+
+    File format: top-level keys ``name``, ``description``, ``scorer_type``,
+    ``eval_prompt``, ``pass_threshold``, ``tags``, plus type-specific extras
+    (``rules`` for programmatic; ``items``/``dimensions`` for boolean_rubric;
+    ``aggregations`` for series). The non-standard extras are collected into
+    the ``config`` dict the backend persists.
+    """
     base: dict = {}
     if file:
         base = _load_scorer_file(file)
 
-    # CLI options override file values
     if name is not None:
         base["name"] = name
     if eval_prompt is not None:
@@ -90,36 +97,48 @@ def create_scorer(
         base["description"] = description
     if pass_threshold is not None:
         base["pass_threshold"] = pass_threshold
+    if scorer_type is not None:
+        base["scorer_type"] = scorer_type
     if tags is not None:
         base["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
 
-    # Apply defaults
     base.setdefault("description", "")
+    base.setdefault("scorer_type", "llm_judge")
     base.setdefault("pass_threshold", 60.0)
+    base.setdefault("eval_prompt", "")
     if isinstance(base.get("tags"), list):
-        pass  # already a list
+        pass
     elif isinstance(base.get("tags"), str):
         base["tags"] = [t.strip() for t in base["tags"].split(",") if t.strip()]
     else:
         base.setdefault("tags", [])
 
-    # Validate required fields
     if not base.get("name"):
         typer.echo("Error: --name is required (or provide 'name' in the JSON file).", err=True)
         raise SystemExit(1)
-    if not base.get("eval_prompt"):
-        typer.echo("Error: --eval-prompt is required (or provide 'eval_prompt' in the JSON file).", err=True)
+    if base["scorer_type"] == "llm_judge" and not base.get("eval_prompt"):
+        typer.echo("Error: --eval-prompt is required for llm_judge scorers.", err=True)
         raise SystemExit(1)
+
+    # Reserved top-level keys; everything else lands in config.
+    reserved = {"name", "description", "scorer_type", "eval_prompt",
+                "pass_threshold", "tags", "config"}
+    config = dict(base.get("config") or {})
+    for k, v in base.items():
+        if k not in reserved:
+            config[k] = v
 
     payload = {
         "name": base["name"],
         "description": base["description"],
+        "scorer_type": base["scorer_type"],
         "eval_prompt": base["eval_prompt"],
         "pass_threshold": base["pass_threshold"],
         "tags": base["tags"],
+        "config": config,
     }
     s = _client().post("/api/scorers", json=payload)
-    console.print(f"[green]Created scorer #{s['id']}: {s['name']}[/green]")
+    console.print(f"[green]Created scorer #{s['id']}: {s['name']} ({s['scorer_type']})[/green]")
 
 
 @scorers_app.command("update")

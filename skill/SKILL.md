@@ -77,8 +77,10 @@ agenticeval scorers create --name "quality-scorer" \
 Key facts:
 - **Standard format:** Judge returns `{"score": <number>, "justification": "..."}`. `passed` = score >= `pass_threshold`.
 - **Boolean rubric format:** Judge returns `{"items": {...}, "dimensions": {...}, "overall_pass_rate": 0.77, "verdict": "pass"}`. `passed` = `verdict == "pass"` AND `overall_pass_rate >= pass_threshold`. Both the scorer's verdict rules and the system threshold must agree — this lets scorers encode cascade logic (e.g., "fabrication in sub-item X force-fails downstream items Y and Z") while the system still enforces a minimum pass rate.
-- **Programmatic format (AE-1):** Deterministic rule eval against `agent_metadata` — no LLM call. `config = {rules: [{path, op, value}], pass_threshold}`. Use for numeric thresholds on agent-returned metrics (latency, recall, n_reduction).
+- **Programmatic format (AE-1):** Deterministic rule eval against `agent_metadata` — no LLM call. `config = {rules: [{path, op, value}], pass_threshold}`. Use for numeric thresholds on agent-returned metrics (latency, recall, n_reduction). **AE-12:** rules may reference `testcase_metadata.*` / `expected_result.*` paths and use `path_value` to pull comparison targets from the testcase row (so per-case thresholds live on the case, not the scorer).
 - **Series format (AE-6):** Cross-round assertions for multi-round runs — `monotonic_increasing`, `monotonic_decreasing`, `equals`, `delta_at_least`. Use when a single round's score can't express the property (e.g., confidence must rise across rounds).
+- **Generic scorers (AE-12):** `eval_prompt` strings can interpolate `{{agent_metadata}}`, `{{expected_result}}`, and `{{testcase_metadata}}` so one shared scorer evaluates many cases with case-specific assertions.
+- **Multi-scorer-per-run (AE-13):** `POST /api/runs` accepts `scorer_ids: [int]` for extra scorers; a case may pin its own via `TestCase.metadata.scorer_id` / `scorer_ids`. Results are bucketed by scorer at `/api/runs/{id}/per-scorer` so each scorer accumulates an independent trust signal.
 - Set `pass_threshold` in the 0–1 range for boolean rubrics (e.g., `0.6`), or 0–100 for standard scorers.
 - See [references/scorer-guide.md](references/scorer-guide.md) for how to write effective eval prompts
 
@@ -143,6 +145,10 @@ agenticeval run --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_i
 # Alternative: separate create + start
 agenticeval runs create --dataset {dataset_id} --scorer {scorer_id} --adapter {adapter_id} --name "run-v1"
 agenticeval runs start {run_id}
+
+# AE-13 Multi-scorer-per-run: extra scorers run alongside --scorer
+agenticeval run --dataset {dataset_id} --scorer {default_scorer_id} --scorer-ids "3,7,9" --adapter {adapter_id} --name "multi-scorer-v1"
+agenticeval runs per-scorer {run_id}    # per-scorer aggregates
 ```
 
 ### 2.2 Analyze Results

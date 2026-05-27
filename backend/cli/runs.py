@@ -83,9 +83,11 @@ def get_run(run_id: int = typer.Argument(..., help="Run ID")):
 @runs_app.command("create")
 def create_run(
     dataset: int = typer.Option(..., "--dataset", "-d", help="Dataset ID"),
-    scorer: int = typer.Option(..., "--scorer", "-s", help="Scorer ID"),
+    scorer: int = typer.Option(..., "--scorer", "-s", help="Scorer ID (default scorer)"),
     adapter: int = typer.Option(..., "--adapter", "-a", help="Adapter ID"),
     name: str = typer.Option("", "--name", "-n", help="Optional run name"),
+    extra_scorers: str = typer.Option("", "--scorer-ids",
+                                       help="AE-13: comma-separated extra scorer IDs (run alongside --scorer)"),
     judge_config_json: str = typer.Option("{}", "--judge-config",
                                           help="Judge config as JSON string"),
     num_rounds: int = typer.Option(1, "--num-rounds", "-r", help="Number of rounds (default: 1)"),
@@ -93,12 +95,19 @@ def create_run(
 ):
     """Create a new eval run (does not start it)."""
     judge_config = parse_json_arg(judge_config_json, "--judge-config")
+    scorer_ids: list[int] = []
+    if extra_scorers.strip():
+        try:
+            scorer_ids = [int(x.strip()) for x in extra_scorers.split(",") if x.strip()]
+        except ValueError:
+            raise typer.BadParameter("--scorer-ids must be a comma-separated list of integers")
     payload = {"dataset_id": dataset, "scorer_id": scorer, "adapter_id": adapter,
-               "name": name, "judge_config": judge_config,
+               "name": name, "scorer_ids": scorer_ids, "judge_config": judge_config,
                "num_rounds": num_rounds, "round_mode": round_mode}
     r = _client().post("/api/runs", json=payload)
     rounds_info = f", {r.get('num_rounds', 1)} rounds ({r.get('round_mode', 'agent')})" if r.get('num_rounds', 1) > 1 else ""
-    console.print(f"[green]Created run #{r['id']}: {r.get('name', '')} (status: {r.get('status', 'pending')}{rounds_info})[/green]")
+    extra_info = f", +{len(scorer_ids)} extra scorers" if scorer_ids else ""
+    console.print(f"[green]Created run #{r['id']}: {r.get('name', '')} (status: {r.get('status', 'pending')}{rounds_info}{extra_info})[/green]")
 
 
 @runs_app.command("delete")
@@ -145,14 +154,39 @@ def show_results(
         return
     table = Table(title=f"Results for Run #{run_id}")
     table.add_column("TC ID", style="cyan", width=6)
+    table.add_column("Scorer", width=7)
     table.add_column("Passed", width=8)
     table.add_column("Duration (ms)", width=14)
     table.add_column("Reasoning")
     for r in data:
         passed_str = "[green]\u2713[/green]" if r.get("passed") else "[red]\u2717[/red]"
         reasoning = (r.get("judge_reasoning") or "")[:60]
-        table.add_row(str(r.get("test_case_id", "")), passed_str,
+        table.add_row(str(r.get("test_case_id", "")),
+                      str(r.get("scorer_id") or "-"), passed_str,
                       str(r.get("duration_ms", "")), reasoning)
+    console.print(table)
+
+
+@runs_app.command("per-scorer")
+def per_scorer(run_id: int = typer.Argument(..., help="Run ID")):
+    """AE-13: show per-scorer aggregates for a multi-scorer run."""
+    data = _client().get(f"/api/runs/{run_id}/per-scorer")
+    if not data:
+        console.print("[yellow]No results found.[/yellow]")
+        return
+    table = Table(title=f"Per-scorer aggregates for Run #{run_id}")
+    table.add_column("Scorer", style="cyan")
+    table.add_column("ID", width=5)
+    table.add_column("Total", width=7)
+    table.add_column("Passed", width=7)
+    table.add_column("Pass rate", width=10)
+    table.add_column("Avg score", width=10)
+    for name, b in data.items():
+        rate = b.get("pass_rate", 0)
+        avg = b.get("avg_score")
+        table.add_row(name, str(b.get("scorer_id") or "-"),
+                      str(b.get("total", 0)), str(b.get("passed", 0)),
+                      f"{rate:.1f}%", f"{avg:.2f}" if isinstance(avg, (int, float)) else "\u2014")
     console.print(table)
 
 
