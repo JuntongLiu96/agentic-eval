@@ -9,6 +9,7 @@ import StatusBadge from '../components/StatusBadge'
 import PassFailIcon from '../components/PassFailIcon'
 import BooleanRubricView from '../components/BooleanRubricView'
 import QuadrantBreakdown from '../components/QuadrantBreakdown'
+import ScorerBreakdown from '../components/ScorerBreakdown'
 import SeriesChart from '../components/SeriesChart'
 import { parseBooleanRubric } from '../utils/booleanRubric'
 import type { EvalResult, TestCaseAveraged } from '../types'
@@ -61,6 +62,8 @@ export default function RunDetailPage() {
 
   const datasetName = datasets?.find(d => d.id === run?.dataset_id)?.name
   const scorerName = scorers?.find(s => s.id === run?.scorer_id)?.name
+  const extraScorerNames = (run?.scorer_ids ?? [])
+    .map(sid => scorers?.find(s => s.id === sid)?.name ?? `#${sid}`)
   const adapterName = adapters?.find(a => a.id === run?.adapter_id)?.name
 
   const [isRunning, setIsRunning] = useState(false)
@@ -131,7 +134,7 @@ export default function RunDetailPage() {
 
       <div className={styles.meta}>
         <span>Dataset: {datasetName ?? run?.dataset_id}</span>
-        <span>Scorer: {scorerName ?? run?.scorer_id}</span>
+        <span>Scorer: {scorerName ?? run?.scorer_id}{extraScorerNames.length > 0 && ` (+${extraScorerNames.join(', ')})`}</span>
         <span>Adapter: {adapterName ?? run?.adapter_id}</span>
         {isMultiRound && <span>Rounds: {run?.num_rounds} ({run?.round_mode} mode)</span>}
         {run?.started_at && <span>Started: {run.started_at}</span>}
@@ -160,6 +163,11 @@ export default function RunDetailPage() {
       {/* AE-7/AE-8: per-quadrant breakdown (single & multi-round) */}
       {summary?.by_quadrant && Object.keys(summary.by_quadrant).length > 0 && (
         <QuadrantBreakdown byQuadrant={summary.by_quadrant} />
+      )}
+
+      {/* AE-13: per-scorer breakdown for multi-scorer runs */}
+      {summary?.by_scorer && Object.keys(summary.by_scorer).length > 1 && (
+        <ScorerBreakdown byScorer={summary.by_scorer} scorers={scorers} />
       )}
 
       {/* AE-9: per-round series chart (multi-round only) */}
@@ -221,6 +229,8 @@ export default function RunDetailPage() {
             expandedRow={expandedRow}
             onToggleRow={(id) => setExpandedRow(expandedRow === id ? null : id)}
             showRoundColumn={false}
+            scorers={scorers}
+            showScorerColumn={(run?.scorer_ids?.length ?? 0) > 0}
           />
         </>
       )}
@@ -228,13 +238,16 @@ export default function RunDetailPage() {
   )
 }
 
-function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
+function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn, scorers, showScorerColumn }: {
   results: EvalResult[]
   expandedRow: number | null
   onToggleRow: (id: number) => void
   showRoundColumn: boolean
+  scorers?: import('../types').Scorer[]
+  showScorerColumn?: boolean
 }) {
-  const colSpan = showRoundColumn ? 6 : 5
+  const extraCols = (showRoundColumn ? 1 : 0) + (showScorerColumn ? 1 : 0)
+  const colSpan = 5 + extraCols
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
@@ -242,6 +255,7 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
           <tr>
             <th className={styles.colTc}>TC</th>
             {showRoundColumn && <th style={{ width: 60 }}>Round</th>}
+            {showScorerColumn && <th style={{ width: 120 }}>Scorer</th>}
             <th className={styles.colPass}>Pass</th>
             <th className={styles.colScore}>Score</th>
             <th className={styles.colDur}>Time</th>
@@ -254,6 +268,7 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn }: {
               <tr className={styles.resultRow} onClick={() => onToggleRow(r.id)}>
                 <td>{r.test_case_name || r.test_case_id}</td>
                 {showRoundColumn && <td>{r.round_number}</td>}
+                {showScorerColumn && <td>{scorers?.find(s => s.id === r.scorer_id)?.name ?? (r.scorer_id ?? '—')}</td>}
                 <td><PassFailIcon passed={r.passed} /></td>
                 <td>{formatScore(r.score)}</td>
                 <td>{(r.duration_ms / 1000).toFixed(1)}s</td>

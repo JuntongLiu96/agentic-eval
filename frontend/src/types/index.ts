@@ -90,6 +90,7 @@ export interface EvalRun {
   judge_config: Record<string, unknown>
   num_rounds: number
   round_mode: string
+  scorer_ids: number[]
   status: string
   started_at: string | null
   finished_at: string | null
@@ -104,6 +105,7 @@ export interface EvalRunCreate {
   judge_config?: Record<string, unknown>
   num_rounds?: number
   round_mode?: string
+  scorer_ids?: number[]
 }
 
 // --- Eval Result ---
@@ -120,6 +122,7 @@ export interface EvalResult {
   test_case_id: number
   test_case_name: string
   round_number: number
+  scorer_id?: number | null
   agent_messages: Record<string, unknown>[] | { main: Record<string, unknown>[]; sub_agents: Record<string, unknown>[] }
   score: number | Record<string, unknown> | string | null | unknown
   judge_reasoning: string
@@ -181,6 +184,18 @@ export interface MultiRoundSummary {
   averaged: RoundSummary
   tc_averaged: TestCaseAveraged[]
   by_quadrant?: Record<string, QuadrantSummary>
+  by_scorer?: Record<string, ScorerSummary>
+}
+
+// AE-13: per-scorer aggregation
+export interface ScorerSummary {
+  scorer_id: number | null
+  total: number
+  passed: number
+  pass_rate: number
+  avg_score?: number
+  min_score?: number
+  max_score?: number
 }
 
 // AE-7: per-quadrant aggregation
