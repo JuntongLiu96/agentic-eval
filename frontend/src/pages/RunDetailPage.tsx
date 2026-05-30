@@ -160,7 +160,7 @@ export default function RunDetailPage() {
 
       {run?.status === 'running' && (
         <div className={styles.progressInfo}>
-          {results ? results.length : 0}/{testCases ? testCases.length * (run?.num_rounds ?? 1) : '?'} results completed
+          {results ? new Set(results.map(r => `${r.test_case_id}:${r.round_number}`)).size : 0}/{testCases ? testCases.length * (run?.num_rounds ?? 1) : '?'} results completed
         </div>
       )}
 
