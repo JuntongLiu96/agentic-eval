@@ -121,8 +121,19 @@ export default function RunDetailPage() {
   }
 
   const displayResults = results ?? []
-  const passedCount = displayResults.filter(r => r.passed).length
-  const totalCount = displayResults.length
+  // Group by test_case_id so multi-scorer-per-case shows as one row with
+  // per-scorer chips inside, instead of N separate rows.
+  const groupedByCase = (() => {
+    const map = new Map<number, EvalResult[]>()
+    for (const r of displayResults) {
+      const arr = map.get(r.test_case_id) ?? []
+      arr.push(r)
+      map.set(r.test_case_id, arr)
+    }
+    return Array.from(map.entries()).map(([tcId, rows]) => ({ tcId, rows }))
+  })()
+  const totalCount = groupedByCase.length
+  const passedCount = groupedByCase.filter(g => g.rows.every(r => r.passed)).length
 
   return (
     <div>
@@ -224,13 +235,12 @@ export default function RunDetailPage() {
             <a href={exportRunUrl(runId)} download className={styles.exportBtn}>Export CSV</a>
           </div>
 
-          <ResultsTable
-            results={displayResults}
+          <GroupedResultsTable
+            groups={groupedByCase}
             expandedRow={expandedRow}
             onToggleRow={(id) => setExpandedRow(expandedRow === id ? null : id)}
-            showRoundColumn={false}
             scorers={scorers}
-            showScorerColumn={(run?.scorer_ids?.length ?? 0) > 0}
+            showRoundColumn={false}
           />
         </>
       )}
@@ -238,16 +248,16 @@ export default function RunDetailPage() {
   )
 }
 
-function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn, scorers, showScorerColumn }: {
-  results: EvalResult[]
+function GroupedResultsTable({ groups, expandedRow, onToggleRow, showRoundColumn, scorers }: {
+  groups: { tcId: number; rows: EvalResult[] }[]
   expandedRow: number | null
   onToggleRow: (id: number) => void
   showRoundColumn: boolean
   scorers?: import('../types').Scorer[]
-  showScorerColumn?: boolean
 }) {
-  const extraCols = (showRoundColumn ? 1 : 0) + (showScorerColumn ? 1 : 0)
-  const colSpan = 5 + extraCols
+  const colSpan = showRoundColumn ? 6 : 5
+  const scorerName = (sid: number | null | undefined) =>
+    scorers?.find(s => s.id === sid)?.name ?? (sid != null ? `#${sid}` : '—')
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
@@ -255,95 +265,103 @@ function ResultsTable({ results, expandedRow, onToggleRow, showRoundColumn, scor
           <tr>
             <th className={styles.colTc}>TC</th>
             {showRoundColumn && <th style={{ width: 60 }}>Round</th>}
-            {showScorerColumn && <th style={{ width: 120 }}>Scorer</th>}
             <th className={styles.colPass}>Pass</th>
-            <th className={styles.colScore}>Score</th>
+            <th>Scorer verdicts</th>
             <th className={styles.colDur}>Time</th>
-            <th className={styles.colReason}>Justification</th>
           </tr>
         </thead>
         <tbody>
-          {results.map(r => (
-            <React.Fragment key={r.id}>
-              <tr className={styles.resultRow} onClick={() => onToggleRow(r.id)}>
-                <td>{r.test_case_name || r.test_case_id}</td>
-                {showRoundColumn && <td>{r.round_number}</td>}
-                {showScorerColumn && <td>{scorers?.find(s => s.id === r.scorer_id)?.name ?? (r.scorer_id ?? '—')}</td>}
-                <td><PassFailIcon passed={r.passed} /></td>
-                <td>{formatScore(r.score)}</td>
-                <td>{(r.duration_ms / 1000).toFixed(1)}s</td>
-                <td className={styles.reasoning}>
-                  {(() => {
-                    const rubric = parseBooleanRubric(r.judge_reasoning)
-                    if (rubric) {
-                      return `${rubric.verdict.toUpperCase().replace(/_/g, ' ')} \u2014 ${(rubric.overall_pass_rate * 100).toFixed(0)}%`
-                    }
-                    return r.judge_reasoning
-                  })()}
-                </td>
-              </tr>
-              {expandedRow === r.id && (
-                <tr className={styles.expandedRow}>
-                  <td colSpan={colSpan}>
-                    <div className={styles.detail}>
-                      <h4>Judge Reasoning</h4>
-                      {(() => {
-                        const rubric = parseBooleanRubric(r.judge_reasoning)
-                        if (rubric) {
-                          return <BooleanRubricView rubric={rubric} />
-                        }
-                        return <p>{r.judge_reasoning}</p>
-                      })()}
-                      <h4>Score</h4>
-                      <pre>{JSON.stringify(r.score, null, 2)}</pre>
-                      {r.turn_results && r.turn_results.length > 0 && (
-                        <>
-                          <h4>Turn Results</h4>
-                          <table className={styles.table} style={{ marginBottom: '1rem' }}>
-                            <thead>
-                              <tr>
-                                <th style={{ width: 60 }}>Turn</th>
-                                <th style={{ width: 60 }}>Pass</th>
-                                <th style={{ width: 80 }}>Score</th>
-                                <th>Justification</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {r.turn_results.map((tr: any) => (
-                                <TurnResultRow key={tr.turn_index} turnResult={tr} />
-                              ))}
-                            </tbody>
-                          </table>
-                        </>
-                      )}
-                      {Array.isArray(r.agent_messages) ? (
-                        <>
-                          <h4>Agent Messages ({r.agent_messages.length})</h4>
-                          <pre>{JSON.stringify(r.agent_messages, null, 2)}</pre>
-                        </>
-                      ) : (
-                        <>
-                          <h4>Main Agent Messages ({(r.agent_messages as any)?.main?.length ?? 0})</h4>
-                          <pre>{JSON.stringify((r.agent_messages as any)?.main, null, 2)}</pre>
-                          {(r.agent_messages as any)?.sub_agents?.length > 0 && (
-                            <>
-                              <h4>Sub-Agent Messages ({(r.agent_messages as any).sub_agents.length})</h4>
-                              <pre>{JSON.stringify((r.agent_messages as any).sub_agents, null, 2)}</pre>
-                            </>
-                          )}
-                        </>
-                      )}
+          {groups.map(({ tcId, rows }) => {
+            const first = rows[0]
+            const allPassed = rows.every(r => r.passed)
+            const avgDurMs = rows.reduce((a, r) => a + r.duration_ms, 0) / rows.length
+            return (
+              <React.Fragment key={tcId}>
+                <tr className={styles.resultRow} onClick={() => onToggleRow(tcId)}>
+                  <td>{first.test_case_name || tcId}</td>
+                  {showRoundColumn && <td>{first.round_number}</td>}
+                  <td><PassFailIcon passed={allPassed} /></td>
+                  <td>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {rows.map(r => (
+                        <span key={r.id} title={`${scorerName(r.scorer_id)}: ${formatScore(r.score)}`}
+                          style={{ padding: '2px 8px', fontSize: 11, borderRadius: 12,
+                            border: '1px solid #ccc',
+                            background: r.passed ? '#e6f4ea' : '#fce8e6',
+                            color: r.passed ? '#137333' : '#a50e0e' }}>
+                          {scorerName(r.scorer_id)}: {r.passed ? '✓' : '✗'} {formatScore(r.score)}
+                        </span>
+                      ))}
                     </div>
                   </td>
+                  <td>{(avgDurMs / 1000).toFixed(1)}s</td>
                 </tr>
-              )}
-            </React.Fragment>
-          ))}
+                {expandedRow === tcId && (
+                  <tr className={styles.expandedRow}>
+                    <td colSpan={colSpan}>
+                      <div className={styles.detail}>
+                        {rows.map((r) => (
+                          <div key={r.id} style={{ borderTop: '1px solid #eee', paddingTop: 8, marginTop: 8 }}>
+                            <h4 style={{ margin: '4px 0' }}>
+                              Scorer: {scorerName(r.scorer_id)} — <PassFailIcon passed={r.passed} /> score {formatScore(r.score)}
+                            </h4>
+                            {(() => {
+                              const rubric = parseBooleanRubric(r.judge_reasoning)
+                              return rubric ? <BooleanRubricView rubric={rubric} /> : <p>{r.judge_reasoning}</p>
+                            })()}
+                            {r.turn_results && r.turn_results.length > 0 && (
+                              <>
+                                <h4>Turn Results</h4>
+                                <table className={styles.table} style={{ marginBottom: '1rem' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ width: 60 }}>Turn</th>
+                                      <th style={{ width: 60 }}>Pass</th>
+                                      <th style={{ width: 80 }}>Score</th>
+                                      <th>Justification</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {r.turn_results.map((tr: any) => (
+                                      <TurnResultRow key={tr.turn_index} turnResult={tr} />
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        {/* Agent messages are identical across scorers for one (case, round) — show once from the first row. */}
+                        {Array.isArray(first.agent_messages) ? (
+                          <>
+                            <h4>Agent Messages ({first.agent_messages.length})</h4>
+                            <pre>{JSON.stringify(first.agent_messages, null, 2)}</pre>
+                          </>
+                        ) : (
+                          <>
+                            <h4>Main Agent Messages ({(first.agent_messages as any)?.main?.length ?? 0})</h4>
+                            <pre>{JSON.stringify((first.agent_messages as any)?.main, null, 2)}</pre>
+                            {(first.agent_messages as any)?.sub_agents?.length > 0 && (
+                              <>
+                                <h4>Sub-Agent Messages ({(first.agent_messages as any).sub_agents.length})</h4>
+                                <pre>{JSON.stringify((first.agent_messages as any).sub_agents, null, 2)}</pre>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
 }
+
 
 function TurnResultRow({ turnResult }: { turnResult: any }) {
   const [expanded, setExpanded] = useState(false)
