@@ -47,6 +47,7 @@ class TestScorersCreateCmd:
     def test_create_scorer(self, MockClient):
         mock = MockClient.return_value
         mock.post.return_value = {"id": 5, "name": "new-scorer", "description": "new",
+                                  "scorer_type": "llm_judge",
                                   "eval_prompt": "judge", "pass_threshold": 60,
                                   "tags": [], "created_at": "2026-01-01", "updated_at": "2026-01-01"}
         result = runner.invoke(app, ["scorers", "create", "--name", "new-scorer",

@@ -14,9 +14,110 @@ from app.models.scorer import Scorer
 from app.services.aggregator import aggregate_run_results, multi_round_summary
 from app.services.judge import assemble_judge_prompt, parse_judge_response, resolve_judge_llm
 from app.services.turns import parse_turns
+from app.services.harness_probes import run_all_probes
 from app.bridge.base import AgentResult
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_with_harness_metrics(
+    agent_metadata: dict[str, Any],
+    case_metadata: dict[str, Any] | None,
+    expected_result: Any,
+) -> dict[str, Any]:
+    """Compute harness-derived metrics from agent self-report + expected.
+
+    The agent reports primitives (files_touched, memory_retrievals, …).
+    The harness derives the comparative metrics (files_recall / _precision,
+    pitfall_avoidance, retrieval_mrr / _recall_at_k, n_reduction) because
+    they need an oracle the agent can't see. See
+    docs/11-agent-integration-guide.md for the split.
+
+    Idempotent: if the agent already supplied a key (case-specific
+    introspection per the guide), the existing value wins.
+    """
+    out = dict(agent_metadata or {})
+    cm = case_metadata or {}
+    er: dict[str, Any] = {}
+    if isinstance(expected_result, dict):
+        er = expected_result
+    elif isinstance(expected_result, str):
+        try:
+            er = json.loads(expected_result)
+        except Exception:
+            er = {}
+    fsa = er.get("first_session_assertions") or {}
+
+    touched = set(out.get("files_touched") or [])
+    expected_files = set(
+        (fsa.get("must_touch_files") or [])
+        + (cm.get("expected_files") or [])
+    )
+    if expected_files and "files_recall" not in out:
+        hit = touched & expected_files
+        out["files_recall"] = len(hit) / len(expected_files)
+    if expected_files and touched and "files_precision" not in out:
+        hit = touched & expected_files
+        out["files_precision"] = len(hit) / len(touched)
+
+    pitfalls = cm.get("pitfalls_in_memory") or []
+    if pitfalls and "pitfall_avoidance" not in out:
+        # heuristic: search assistant text for each pitfall token; treat
+        # presence as "hit" (the agent walked into the trap). Cases can
+        # override by self-reporting the metric directly.
+        hits = 0
+        haystack = json.dumps(out).lower()
+        for p in pitfalls:
+            if isinstance(p, str) and p.lower() in haystack:
+                hits += 1
+        out["pitfall_avoidance"] = max(0.0, 1.0 - hits / len(pitfalls))
+
+    must_retrieve = list(cm.get("must_retrieve_memory_ids") or [])
+    retrievals = out.get("memory_retrievals") or []
+    if must_retrieve and retrievals:
+        # Use the first retrieval call's ranked passages.
+        first_passages = (retrievals[0] or {}).get("passages") or []
+        ranked_ids: list[str] = []
+        for p in first_passages:
+            mid = p.get("memory_id") if isinstance(p, dict) else None
+            if mid:
+                ranked_ids.append(mid)
+        if "retrieval_recall_at_k" not in out:
+            hit = set(must_retrieve) & set(ranked_ids)
+            out["retrieval_recall_at_k"] = len(hit) / len(must_retrieve)
+        if "retrieval_mrr" not in out:
+            best = 0.0
+            for target in must_retrieve:
+                if target in ranked_ids:
+                    rank = ranked_ids.index(target) + 1
+                    best = max(best, 1.0 / rank)
+            out["retrieval_mrr"] = best
+
+    baseline = cm.get("baseline_trajectory_steps")
+    n_prime = out.get("trajectory_steps")
+    if isinstance(baseline, (int, float)) and baseline > 0 and isinstance(n_prime, (int, float)):
+        if "n_reduction" not in out:
+            out["n_reduction"] = max(0.0, 1.0 - (n_prime / baseline))
+        # transfer_n_reduction (CA-006/012): same delta, applied when memory
+        # distilled in one repo drives a task in a sibling repo. The case
+        # carries the same baseline; the metric name differs so the suite can
+        # distinguish in-repo replay from cross-repo transfer.
+        if "transfer_n_reduction" not in out:
+            out["transfer_n_reduction"] = out["n_reduction"]
+
+    # Staleness (CA-007 / GN-007): a stale citation points at a path the
+    # refactor moved/removed. We catch staleness iff the agent did NOT write
+    # to a path the expected assertions mark must_not_touch (the dead path)
+    # AND did touch the relocated path (must_touch). False-positive sessions
+    # (the negative control) carry no must_not_touch — a clean run there is
+    # implicitly fp_rate 0.
+    must_not_touch = set(fsa.get("must_not_touch_files") or [])
+    if must_not_touch and "staleness_catch_rate" not in out:
+        walked_into = touched & must_not_touch
+        out["staleness_catch_rate"] = 1.0 if not walked_into else 0.0
+        out["staleness_false_positive_rate"] = out.get("staleness_false_positive_rate", 0.0)
+
+    return out
 
 
 def _parse_case_metadata(tc: Any) -> dict[str, Any]:
@@ -93,6 +194,31 @@ def _build_all_messages(agent_result: Any) -> Any:
     return agent_result.messages
 
 
+def _assistant_text(messages: list[dict[str, Any]]) -> str:
+    """Concatenate the assistant text emitted in one turn's messages.
+
+    Text probes match ``must_present`` / ``must_absent`` terms against what the
+    agent *said* this turn. Content may be a plain string or a list of content
+    blocks (Anthropic-style); pull text from both, skip tool_use/tool_result.
+    """
+    parts: list[str] = []
+    for m in messages or []:
+        if not isinstance(m, dict) or m.get("role") != "assistant":
+            continue
+        content = m.get("content")
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") in (None, "text"):
+                    t = block.get("text")
+                    if isinstance(t, str):
+                        parts.append(t)
+                elif isinstance(block, str):
+                    parts.append(block)
+    return "\n".join(parts)
+
+
 async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, Any], None]:
     run = await db.get(EvalRun, run_id)
     if not run:
@@ -122,6 +248,26 @@ async def run_eval(run_id: int, db: AsyncSession) -> AsyncGenerator[dict[str, An
     test_cases = result.scalars().all()
     if not test_cases:
         yield {"type": "error", "message": "Dataset has no test cases"}; return
+
+    # AE-13: pre-resolve every scorer id referenced by any case's metadata
+    # so the per-case dispatcher never needs an extra DB round-trip mid-loop
+    # (the in-loop db.get was failing silently for some cases and causing
+    # them to fall through to the run's default scorer).
+    referenced_ids: set[int] = set()
+    for tc in test_cases:
+        md = _parse_case_metadata(tc)
+        ids = md.get("scorer_ids")
+        if isinstance(ids, list):
+            referenced_ids.update(i for i in ids if isinstance(i, int))
+        single = md.get("scorer_id")
+        if isinstance(single, int):
+            referenced_ids.add(single)
+    for sid in referenced_ids:
+        if sid in scorer_map:
+            continue
+        extra = await db.get(Scorer, sid)
+        if extra:
+            scorer_map[extra.id] = extra
 
     judge_config = json.loads(run.judge_config) if isinstance(run.judge_config, str) else run.judge_config
     adapter_config = json.loads(adapter_row.config) if isinstance(adapter_row.config, str) else adapter_row.config
@@ -232,6 +378,7 @@ async def _run_scorer_mode(
         accumulated_metadata: dict[str, Any] = {}
         turn_results_list = []
         agent_failed = False
+        per_turn_responses: list[str] = []
 
         for turn_index, turn in enumerate(turns):
             turn_meta = dict(case_metadata)
@@ -249,6 +396,7 @@ async def _run_scorer_mode(
                 session_id = agent_result.metadata["session_id"]
             all_messages.extend(agent_result.messages)
             all_sub_messages.extend(agent_result.sub_agent_messages)
+            per_turn_responses.append(_assistant_text(agent_result.messages))
             # AE-2: accumulate metadata across turns.
             if agent_result.metadata:
                 accumulated_metadata.update(agent_result.metadata)
@@ -264,7 +412,9 @@ async def _run_scorer_mode(
                 metadata=accumulated_metadata if turns else {},
                 success=True,
             )
-            cached_results[tc.id] = {"result": combined, "duration_ms": duration, "turn_results": turn_results_list}
+            cached_results[tc.id] = {"result": combined, "duration_ms": duration,
+                                     "turn_results": turn_results_list,
+                                     "per_turn_responses": per_turn_responses}
 
         yield {"type": "case_completed", "round": 0, "case_index": i, "case_name": tc.name,
                "success": not agent_failed}
@@ -348,6 +498,7 @@ async def _eval_single_case(
         turn_results_list = []
 
         logger.info(f"Run #{run.id} case {tc.name}: {len(turns)} turns to execute")
+        per_turn_responses: list[str] = []
 
         for turn_index, turn in enumerate(turns):
             logger.info(f"Run #{run.id} case {tc.name}: sending turn {turn_index + 1}/{len(turns)} "
@@ -384,6 +535,7 @@ async def _eval_single_case(
 
             all_messages.extend(agent_result.messages)
             all_sub_messages.extend(agent_result.sub_agent_messages)
+            per_turn_responses.append(_assistant_text(agent_result.messages))
             # AE-2: merge per-turn metadata (later turns override earlier keys —
             # final-turn metrics like n_reduction reflect the whole trajectory).
             if agent_result.metadata:
@@ -393,10 +545,13 @@ async def _eval_single_case(
 
             if "expected_result" in turn:
                 try:
+                    enriched_md = _enrich_with_harness_metrics(
+                        accumulated_metadata, case_metadata, turn["expected_result"]
+                    )
                     turn_parsed = await _run_judge(
                         judge_client, scorer, turn["expected_result"],
                         all_messages, all_sub_messages or None,
-                        agent_metadata=accumulated_metadata,
+                        agent_metadata=enriched_md,
                         testcase_metadata=case_metadata,
                     )
                     turn_results_list.append({
@@ -445,8 +600,20 @@ async def _eval_single_case(
         all_messages = final_result.messages
         all_sub_messages = final_result.sub_agent_messages if hasattr(final_result, 'sub_agent_messages') else []
         turn_results_list = cached_agent_result.get("turn_results", [])
+        per_turn_responses = cached_agent_result.get("per_turn_responses", [])
 
     final_metadata = getattr(final_result, "metadata", None) or {}
+    final_metadata = _enrich_with_harness_metrics(final_metadata, case_metadata, expected)
+    # Probe layer: metrics the agent can't self-report (text/store/tenant probes).
+    # Driven by case_metadata.probe_spec; idempotent — agent self-report wins.
+    probe_spec = case_metadata.get("probe_spec") if isinstance(case_metadata, dict) else None
+    if probe_spec:
+        try:
+            probe_out = await run_all_probes(probe_spec, per_turn_responses, None)
+            for k, v in probe_out.items():
+                final_metadata.setdefault(k, v)
+        except Exception as e:
+            logger.warning(f"Run #{run.id} case {tc.name}: probe layer failed — {e}")
     all_msg_obj = _build_all_messages(final_result)
     total_duration = int((time.monotonic() - start_time) * 1000) if run_agent else agent_duration
 
