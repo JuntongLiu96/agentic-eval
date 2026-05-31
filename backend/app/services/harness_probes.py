@@ -444,3 +444,57 @@ async def run_all_probes(
     except Exception as e:  # noqa: BLE001
         logger.warning("staleness probe family failed: %s", e)
     return out
+
+
+# ───────────────────────── out-of-band seeding ─────────────────────────
+
+async def seed_memory_store(
+    ingestion: list[dict[str, Any]] | None,
+    default_scope: dict[str, Any] | None,
+) -> int:
+    """Seed prior-run memory into memsvc OUT-OF-BAND, before the agent runs.
+
+    A case's ``ingestion[]`` is prior-run memory the case author wants present
+    before the agent's first turn (e.g. CA-001's migration recipe, GN-004's
+    seeded PII). It MUST NOT be written through the agent bridge — doing so
+    would hand the case oracle to the system under test (a cheating path).
+    Instead the harness writes it directly to the memory service here, exactly
+    as the standalone ``evomem-seed`` CLI does.
+
+    Each entry carries a full trajectory plus an authoritative
+    ``ground_truth_distillation`` (the seed field — distinct from the agent's
+    ``self_distillation``). A per-trajectory ``scope_override`` lets one case
+    seed multiple tenants (GN-006: tenant-a / -b / -c); otherwise the case
+    scope applies.
+
+    Returns the number of trajectories successfully seeded. Idempotent at the
+    memsvc layer: an author-supplied ``memory_id`` that already exists is
+    reused, not duplicated, and an erased tombstone is never resurrected.
+    """
+    if not ingestion:
+        return 0
+    seeded = 0
+    base = _memsvc_base()
+    async with httpx.AsyncClient(base_url=base, headers=_auth_headers(), timeout=30) as c:
+        for traj in ingestion:
+            if not isinstance(traj, dict):
+                continue
+            traj_scope = traj.get("scope_override") or default_scope or {}
+            body: dict[str, Any] = {
+                "task": traj.get("task", ""),
+                "outcome": traj.get("outcome", "success"),
+                "trace_steps": traj.get("trace_steps") or [],
+                "scope": traj_scope,
+            }
+            if traj.get("trajectory_id"):
+                body["trajectory_id"] = traj["trajectory_id"]
+            # SEED field — authoritative, harness-written. Never self_distillation.
+            if traj.get("ground_truth_distillation"):
+                body["ground_truth_distillation"] = traj["ground_truth_distillation"]
+            try:
+                r = await c.post("/memory/distill", json=body)
+                r.raise_for_status()
+                seeded += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning("out-of-band ingestion seed failed: %s", e)
+    return seeded

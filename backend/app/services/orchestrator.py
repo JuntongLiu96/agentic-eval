@@ -14,7 +14,7 @@ from app.models.scorer import Scorer
 from app.services.aggregator import aggregate_run_results, multi_round_summary
 from app.services.judge import assemble_judge_prompt, parse_judge_response, resolve_judge_llm
 from app.services.turns import parse_turns
-from app.services.harness_probes import run_all_probes
+from app.services.harness_probes import run_all_probes, seed_memory_store
 from app.bridge.base import AgentResult
 
 logger = logging.getLogger(__name__)
@@ -140,6 +140,27 @@ def _parse_case_metadata(tc: Any) -> dict[str, Any]:
             return {}
         return dict(parsed) if isinstance(parsed, dict) else {}
     return {}
+
+
+async def _seed_case_ingestion(case_metadata: dict[str, Any], run_id: int, case_name: str) -> None:
+    """Seed a case's prior-run memory into memsvc out-of-band, before the agent runs.
+
+    ``ingestion[]`` is the case author's prior-run memory (oracle fixture). It is
+    written directly to the memory service — never through the agent bridge —
+    so the system under test is not handed its own answer. In-agent-distill
+    cases (GN-001/002 etc.) carry ``ingestion: []`` and seed nothing; the agent
+    must distill those facts itself via its memory_distill tool. See
+    docs/11-agent-integration-guide.md "Seeding is out-of-band".
+    """
+    ingestion = case_metadata.get("ingestion")
+    if not ingestion:
+        return
+    scope = case_metadata.get("scope")
+    try:
+        n = await seed_memory_store(ingestion, scope)
+        logger.info(f"Run #{run_id} case {case_name}: seeded {n} ingestion trajectory(ies) out-of-band")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Run #{run_id} case {case_name}: out-of-band seeding failed — {e}")
 
 
 async def _run_judge(
@@ -380,6 +401,9 @@ async def _run_scorer_mode(
         agent_failed = False
         per_turn_responses: list[str] = []
 
+        # Seed prior-run memory out-of-band before the agent's first turn.
+        await _seed_case_ingestion(case_metadata, run.id, tc.name)
+
         for turn_index, turn in enumerate(turns):
             turn_meta = dict(case_metadata)
             turn_meta["phase"] = "agent_run"
@@ -499,6 +523,9 @@ async def _eval_single_case(
 
         logger.info(f"Run #{run.id} case {tc.name}: {len(turns)} turns to execute")
         per_turn_responses: list[str] = []
+
+        # Seed prior-run memory out-of-band before the agent's first turn.
+        await _seed_case_ingestion(case_metadata, run.id, tc.name)
 
         for turn_index, turn in enumerate(turns):
             logger.info(f"Run #{run.id} case {tc.name}: sending turn {turn_index + 1}/{len(turns)} "
